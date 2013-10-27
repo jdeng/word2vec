@@ -20,7 +20,7 @@
 #include <fstream>
 #include <sstream>
 
-#include <ctime>
+#include <chrono>
 #include <stdio.h>
 
 typedef std::vector<float> Vector;
@@ -197,7 +197,7 @@ struct Model
 		int current_words = 0;
 		float alpha0 = alpha_, min_alpha = min_alpha_;
 
-		typedef std::vector<SentenceP> Job;
+		typedef std::vector<Sentence *> Job;
 		typedef std::unique_ptr<Job> JobP;
 		std::mutex m;
 		std::condition_variable cond_var;
@@ -220,15 +220,16 @@ struct Model
 	
 				if (!job) break;
 				
-				std::clock_t cstart = std::clock();
+				auto cstart = std::chrono::high_resolution_clock::now();
 				float alpha = std::max(min_alpha, float(alpha0 * (1.0 - 1.0 * current_words / total_words)));
 				int words = 0;
-				for (auto& sentence: *job) {
+				for (auto sentence: *job) {
 					words += train_sentence(*sentence, alpha);
 				}
 				current_words += words;
-				std::clock_t cend = std::clock();
-				printf("training alpha: %f progress: %f%% words per thread sec: %f\n", alpha, current_words * 100.0/total_words, words / (float(cend - cstart) / CLOCKS_PER_SEC));
+				auto cend = std::chrono::high_resolution_clock::now();
+				auto duration = std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count();
+				printf("training alpha: %.4f progress: %.2f%% words per thread sec: %.3fK\n", alpha, current_words * 100.0/total_words, words * 1000.0 / duration);
 			}
 		};
 
@@ -265,10 +266,10 @@ struct Model
 				sentence->words_.push_back(it->second.get());
 			}
 
-			job->push_back(sentence);
+			job->push_back(sentence.get());
 			if ( job->size() == batch_size) {
 				enqueue_job(std::move(job));
-				job.reset(new std::vector<SentenceP>);
+				job.reset(new Job);
 			}
 		}
 
@@ -407,13 +408,13 @@ private:
 		int len = sentence.words_.size();
 		int reduced_window = rand() % window_;
 		for (int i=0; i<len; ++i) {
-			Word& current = *sentence.words_[i];
+			const Word& current = *sentence.words_[i];
 			size_t codelen = current.codes_.size();
 
 			int j = std::max(0, i - window_ + reduced_window);
 			int k = std::min(len, i + window_ + 1 - reduced_window);
 			for (; j < k; ++j) {
-				Word *word = sentence.words_[j];
+				const Word *word = sentence.words_[j];
 				if (j == i || word->codes_.empty()) 
 					continue;
 				int word_index = word->index_;
