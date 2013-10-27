@@ -53,16 +53,25 @@ struct Model
 	std::vector<Vector> syn0_, syn1_;
 	std::vector<Vector> syn0norm_;
 
+	//negative sampling
+	std::vector<Vector> syn1neg_;
+	std::vector<int> unigram_;
+
 	std::unordered_map<std::string, WordP> vocab_;
 	std::vector<Word *> words_;
 
 	int layer1_size_;
 	int window_;
+
+	//subsampling
+	float sample_;
+
 	int min_count_;
+	int negative_;
 
 	float alpha_, min_alpha_;
 
-	Model(int size = 100, int window = 5, int min_count = 5, float alpha = 0.025, float min_alpha = 0.0001) :layer1_size_(size), window_(window), min_count_(min_count), alpha_(alpha), min_alpha_(min_alpha) {}
+	Model(int size = 100, int window = 5, float sample = 0.001, int min_count = 5, int negative = 0, float alpha = 0.025, float min_alpha = 0.0001) :layer1_size_(size), window_(window), sample_(sample), min_count_(min_count), negative_(negative), alpha_(alpha), min_alpha_(min_alpha) {}
 
 
 	bool has(const std::string& w) const { return vocab_.find(w) != vocab_.end(); }
@@ -86,22 +95,25 @@ struct Model
 		if (n_words <= 1) return -1;
 
 		words_.reserve(n_words);
-		int index = 0;
+		auto comp = [](Word *w1, Word *w2) { return w1->count_ > w2->count_; };
+
 		for (auto& p: vocab) {
 			uint32_t count = p.second;
 			if (count <= min_count_) continue;
 
-			auto r = vocab_.emplace(p.first, WordP(new Word{index, p.first, count}));
+			auto r = vocab_.emplace(p.first, WordP(new Word{0, p.first, count}));
 			words_.push_back((r.first->second.get()));
-			++index;
 		}
+		std::sort(words_.begin(), words_.end(), comp);
+
+		int index = 0;
+		for (auto& w: words_) w->index_ = index++;
 
 		printf("collected %lu distinct words with min_count=%d\n", vocab_.size(), min_count_);
 
-		n_words = vocab_.size();
-
+		n_words = words_.size();
+		
 		std::vector<Word *> heap = words_;
-		auto comp = [](Word *w1, Word *w2) { return w1->count_ > w2->count_; };
 		std::make_heap(heap.begin(), heap.end(), comp);
 
 		std::vector<WordP> tmp;
@@ -154,11 +166,32 @@ struct Model
 		}
 		for (auto& s: syn1_) s.resize(layer1_size_);
 
+#if 0
+		//TODO: verify
+		if (negative_ > 0) {
+			syn1neg_.resize(n_words);
+			for (auto& s: syn1neg_) s.resize(layer1_size_);
+
+			unigram_.resize(1e8);
+			const float power = 0.75;
+			float sum = std::accumulate(words_.begin(), words_.end(), 0.0, [&power](float x, Word *word) { return x + ::pow(word->count_, power); });
+			float d1 = ::pow(words_[0]->count_, power) / sum;
+
+			int i = 0;
+			for (int a=0; a<unigram_.size(); ++a) {
+				unigram_[a] = i;
+				if (float(a) / unigram_.size() > d1) {
+					++i; d1 += ::pow(words_[i]->count_, power) / sum;
+				}
+				if (i >= words_.size()) i = words_.size() - 1;
+			}
+		}
+#endif
+
 		return 0;
 	}
 
 	int train(std::vector<SentenceP>& sentences, int n_workers) {
-
 		int total_words = std::accumulate(vocab_.begin(), vocab_.end(), 0, 
 			[](int x, const std::pair<std::string, WordP>& p) { return (int)(x + p.second->count_); });
 		int current_words = 0;
@@ -211,14 +244,25 @@ struct Model
 	
 		JobP job(new Job);
 		const size_t batch_size = 800;
+
+		std::default_random_engine eng(::time(NULL));
+		std::uniform_real_distribution<float> rng(0.0, 1.0);
+
 		for (auto& sentence: sentences) {
 			if (sentence->tokens_.empty()) 
 				continue;
 			size_t len = sentence->tokens_.size();
 			sentence->words_.reserve(len);
-			for (size_t i=0, j=0; i<len; ++i) {
+			for (size_t i=0; i<len; ++i) {
 				auto it = vocab_.find(sentence->tokens_[i]);
-				if (it != vocab_.end()) sentence->words_.push_back(it->second.get());
+				if (it == vocab_.end()) continue; 
+				Word *word = it->second.get();
+				// subsampling
+				if (sample_ > 0) {
+					float rnd = (sqrt(word->count_ / (sample_ * total_words)) + 1) * (sample_ * total_words) / word->count_;
+					if (rnd < rng(eng)) continue;
+				}
+				sentence->words_.push_back(it->second.get());
 			}
 
 			job->push_back(sentence);
@@ -397,7 +441,36 @@ private:
 //				syn1_[idx] += syn0_[word_index] * g;
 				}
 
-//			syn0_[word_index] += work;
+				//negative sampling
+#if 0
+				if (negative_ > 0) {
+					for (int d = 0; d < negative_ + 1; ++d) {
+						int label = (d == 0? 1: 0);
+						int target = 0;
+						if (d == 0) target = i;
+						else {
+							target = unigram_[rand() % unigram_.size()];
+							if (target == 0) target = rand() % (vocab_.size() - 1) + 1;
+							if (target == i) continue;
+						}
+
+						auto& l2 = syn1neg_[target];
+						float f = dot(l1, l2), g = 0;
+						if (f > max_exp) g = (label - 1) * alpha;
+						else if (f < -max_exp) g = (label - 0) * alpha;
+						else {
+							int fi = int((f + max_exp) * (max_size / max_exp / 2.0));
+							g = (label - table[fi]) * alpha;
+						}
+
+						saxpy(work, g, l2);
+						saxpy(l2, g, l1);
+						
+					}
+				}
+#endif
+
+//				syn0_[word_index] += work;
 				saxpy(l1, 1.0, work);
 			}
 			++count;

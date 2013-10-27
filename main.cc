@@ -52,7 +52,11 @@ int accuracy(Model& model, std::string questions, int restrict_vocab = 30000) {
 int main(int argc, const char *argv[])
 {
 	Model model(200);
+	model.sample_ = 0;
+//	model.window_ = 10;
 	int n_workers = 4;
+
+	::srand(::time(NULL));
 
 	auto distance = [&model]() {
 		while (1) {
