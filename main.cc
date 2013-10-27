@@ -54,6 +54,7 @@ int main(int argc, const char *argv[])
 	Model model(200);
 	model.sample_ = 0;
 //	model.window_ = 10;
+//	model.phrase_ = true;
 	int n_workers = 4;
 
 	::srand(::time(NULL));

@@ -71,25 +71,88 @@ struct Model
 
 	float alpha_, min_alpha_;
 
-	Model(int size = 100, int window = 5, float sample = 0.001, int min_count = 5, int negative = 0, float alpha = 0.025, float min_alpha = 0.0001) :layer1_size_(size), window_(window), sample_(sample), min_count_(min_count), negative_(negative), alpha_(alpha), min_alpha_(min_alpha) {}
+	bool phrase_;
+	float phrase_threshold_;
+
+	Model(int size = 100, int window = 5, float sample = 0.001, int min_count = 5, int negative = 0, float alpha = 0.025, float min_alpha = 0.0001) 
+		:layer1_size_(size), window_(window), sample_(sample), min_count_(min_count), negative_(negative)
+	, alpha_(alpha), min_alpha_(min_alpha) 
+	, phrase_(false), phrase_threshold_(100)
+	{}
 
 
 	bool has(const std::string& w) const { return vocab_.find(w) != vocab_.end(); }
 
-	int build_vocab(const std::vector<SentenceP>& sentences) {
+	int build_vocab(std::vector<SentenceP>& sentences) {
 		size_t count = 0;
 		std::unordered_map<std::string, int> vocab;
-		auto progress = [&]() {
-			printf("collecting %lu sentences, %lu distinct words, %d words\n", count, vocab.size(), 
-				std::accumulate(vocab.begin(), vocab.end(), 0, [](int x, const std::pair<std::string, int>& v) { return x + v.second; }));
+		auto progress = [&count](const char *type, const std::unordered_map<std::string, int>& vocab) {
+			printf("collecting [%s] %lu sentences, %lu distinct %ss, %d %ss\n", type, count, vocab.size(), type, 
+				std::accumulate(vocab.begin(), vocab.end(), 0, [](int x, const std::pair<std::string, int>& v) { return x + v.second; }), type);
 		};
 
 		for (auto& sentence: sentences) {
 			++count;
-			if (count % 10000 == 0) progress();
-			for (auto& token: sentence->tokens_) vocab[token] += 1;
+			if (count % 10000 == 0) progress("word", vocab);
+
+			std::string last_token;
+			for (auto& token: sentence->tokens_) {
+				vocab[token] += 1;
+				// add bigram phrases
+				if (phrase_) {
+					if(!last_token.empty()) vocab[last_token + "_" + token] += 1;
+					last_token = token;
+				}
+			}
 		}
-		progress();
+		progress("word", vocab);
+
+		if (phrase_) {
+			count = 0;
+			int total_words = std::accumulate(vocab.begin(), vocab.end(), 0, [](int x, const std::pair<std::string, int>& v) { return x + v.second; });
+
+			std::unordered_map<std::string, int> phrase_vocab;
+
+			for (auto& sentence: sentences) {
+				++count;
+				if (count % 10000 == 0) progress("phrase", phrase_vocab);
+				
+				std::vector<std::string> phrase_tokens;
+				std::string last_token;
+				uint32_t pa = 0, pb = 0, pab = 0;
+				for (auto& token: sentence->tokens_) {
+					pb = vocab[token];
+					if (!	last_token.empty()) {
+						std::string phrase = last_token + "_" + token;	
+						pab = vocab[phrase];
+						float score = 0;
+						if (pa >= min_count_ && pb >= min_count_ && pab >= min_count_)
+							score = (pab - min_count_ ) / (float(pa) * pb) * total_words;
+						if (score > phrase_threshold_) {
+							phrase_tokens.push_back(phrase);
+							token.clear();
+							phrase_vocab[phrase] += 1;
+						}
+						else {
+							phrase_tokens.push_back(last_token);
+							phrase_vocab[last_token] += 1;
+						}
+					}
+					last_token = token;
+					pa = pb;
+				}
+
+				if (!last_token.empty()) {
+					phrase_tokens.push_back(last_token);
+					phrase_vocab[last_token] += 1;
+				}
+				sentence->tokens_.swap(phrase_tokens);
+			}
+			progress("phrase", phrase_vocab);
+
+			printf("using phrases\n");
+			vocab.swap(phrase_vocab);
+		}
 
 		int n_words = vocab.size();
 		if (n_words <= 1) return -1;
