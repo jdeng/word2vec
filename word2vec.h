@@ -23,7 +23,7 @@
 #include <chrono>
 #include <stdio.h>
 
-typedef std::vector<float> Vector;
+#include "v.h"
 
 struct Word
 {
@@ -48,7 +48,7 @@ struct Sentence
 };
 typedef std::shared_ptr<Sentence> SentenceP;
 
-struct Model
+struct Word2Vec
 {
 	std::vector<Vector> syn0_, syn1_;
 	std::vector<Vector> syn0norm_;
@@ -74,7 +74,7 @@ struct Model
 	bool phrase_;
 	float phrase_threshold_;
 
-	Model(int size = 100, int window = 5, float sample = 0.001, int min_count = 5, int negative = 0, float alpha = 0.025, float min_alpha = 0.0001) 
+	Word2Vec(int size = 100, int window = 5, float sample = 0.001, int min_count = 5, int negative = 0, float alpha = 0.025, float min_alpha = 0.0001) 
 		:layer1_size_(size), window_(window), sample_(sample), min_count_(min_count), negative_(negative)
 	, alpha_(alpha), min_alpha_(min_alpha) 
 	, phrase_(false), phrase_threshold_(100)
@@ -344,7 +344,7 @@ struct Model
 		for (auto& t:	workers) t.join();
 
 		syn0norm_ = syn0_;
-		for (auto& v: syn0norm_) unit(v);
+		for (auto& v: syn0norm_) v::unit(v);
 
 		return 0;
 	}
@@ -395,7 +395,7 @@ struct Model
 		printf("%d words loaded\n", n_words);
 
 		syn0norm_ = syn0_;
-		for (auto& v: syn0norm_) unit(v);
+		for (auto& v: syn0norm_) v::unit(v);
 		
 		return 0;	
 	}
@@ -410,7 +410,7 @@ struct Model
 			if (it == vocab_.end()) return;
 
 			Word& word = *it->second;
-			saxpy(mean, weight, syn0norm_[word.index_]);
+			v::saxpy(mean, weight, syn0norm_[word.index_]);
 
 			all_words.push_back(word.index_);
 		};
@@ -418,7 +418,7 @@ struct Model
 		for (auto& w: positive) add_word(w, 1.0);
 		for (auto& w: negative) add_word(w, -1.0);
 
-		unit(mean);
+		v::unit(mean);
 
 		Vector dists;
 		std::vector<int> indexes;
@@ -427,7 +427,7 @@ struct Model
 		dists.reserve(syn0norm_.size());
 		indexes.reserve(syn0norm_.size());
 		for (auto &x: syn0norm_) {
-			dists.push_back(dot(x, mean));		
+			dists.push_back(v::dot(x, mean));		
 			indexes.push_back(i++);
 		}
 
@@ -488,7 +488,7 @@ private:
 					int idx = current.points_[b];
 					auto& l2 = syn1_[idx];
 				
-					float f = dot(l1, l2);
+					float f = v::dot(l1, l2);
 					if (f <= -max_exp || f >= max_exp) 
 						continue;
 		
@@ -498,8 +498,8 @@ private:
 //				f = sigmoid(f);
 					float g = (1 - current.codes_[b] - f) * alpha;
 
-					saxpy(work, g, l2);
-					saxpy(l2, g, l1);
+					v::saxpy(work, g, l2);
+					v::saxpy(l2, g, l1);
 					
 //				work += syn1_[idx] * g;
 //				syn1_[idx] += syn0_[word_index] * g;
@@ -519,7 +519,7 @@ private:
 						}
 
 						auto& l2 = syn1neg_[target];
-						float f = dot(l1, l2), g = 0;
+						float f = v::dot(l1, l2), g = 0;
 						if (f > max_exp) g = (label - 1) * alpha;
 						else if (f < -max_exp) g = (label - 0) * alpha;
 						else {
@@ -527,15 +527,15 @@ private:
 							g = (label - table[fi]) * alpha;
 						}
 
-						saxpy(work, g, l2);
-						saxpy(l2, g, l1);
+						v::saxpy(work, g, l2);
+						v::saxpy(l2, g, l1);
 						
 					}
 				}
 #endif
 
 //				syn0_[word_index] += work;
-				saxpy(l1, 1.0, work);
+				v::saxpy(l1, 1.0, work);
 			}
 			++count;
 		}
@@ -545,28 +545,9 @@ private:
 	float similarity(const std::string& w1, const std::string& w2) const {
 		auto it1 = vocab_.find(w1), it2 = vocab_.find(w2);
 		if (it1 != vocab_.end() && it2 != vocab_.end())
-			return dot(syn0_[it1->second->index_], syn0_[it2->second->index_]);
+			return v::dot(syn0_[it1->second->index_], syn0_[it2->second->index_]);
 		return 0;
 	}
 
-	static inline float dot(const Vector&x, const Vector& y) { 
-		int m = x.size(); const float *xd = x.data(), *yd = y.data();
-		float sum = 0.0;
-		while (--m >= 0) sum += (*xd++) * (*yd++);
-		return sum;
-	}
-
-	static inline void saxpy(Vector& x, float g, const Vector& y) {
-		int m = x.size(); float *xd = x.data(); const float *yd = y.data();
-		while (--m >= 0) (*xd++) += g * (*yd++);
-	}
-
-	static inline void unit(Vector& x) {
-		float len = ::sqrt(dot(x, x));
-		if (len == 0) return;
-
-		int m = x.size(); float *xd = x.data();
-		while (--m >= 0) (*xd++) /= len;
-	}
 };
 

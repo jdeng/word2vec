@@ -6,8 +6,9 @@
 
 #include "word2vec.h"
 #include <iostream>
+#include <initializer_list>
 
-int accuracy(Model& model, std::string questions, int restrict_vocab = 30000) {
+int accuracy(Word2Vec& model, std::string questions, int restrict_vocab = 30000) {
 	std::ifstream in(questions);
 	std::string line;
 	auto lower = [](std::string& data) { std::transform(data.begin(), data.end(), data.begin(), ::tolower);};
@@ -51,7 +52,7 @@ int accuracy(Model& model, std::string questions, int restrict_vocab = 30000) {
 
 int main(int argc, const char *argv[])
 {
-	Model model(200);
+	Word2Vec model(200);
 	model.sample_ = 0;
 //	model.window_ = 10;
 //	model.phrase_ = true;
@@ -73,7 +74,7 @@ int main(int argc, const char *argv[])
 		}
 	};
 
-	bool train = true, test = true;
+	bool train = false, test = false;
 	if (train) {
 		std::vector<SentenceP> sentences;
 
@@ -112,7 +113,6 @@ int main(int argc, const char *argv[])
 		distance();
 		accuracy(model, "questions-words.txt");
 	}
-
 
 	return 0;
 }
