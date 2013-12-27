@@ -60,7 +60,7 @@ int main(int argc, const char *argv[])
 	auto distance = [&model]() {
 		while (1) {
 			std::string s;
-			std::cout << "\nInput(:quit to break):";
+			std::cout << "\nFind nearest word for (:quit to break):";
 			std::cin >> s;
 			if (s == ":quit") break;
 			auto p = model.most_similar(std::vector<std::string>{s}, std::vector<std::string>(), 10);
@@ -71,7 +71,7 @@ int main(int argc, const char *argv[])
 		}
 	};
 
-	bool train = true, test = true;
+	bool train = true, test = false;
 	if (train) {
 		std::vector<SentenceP> sentences;
 
@@ -98,9 +98,20 @@ int main(int argc, const char *argv[])
 		if (!sentence->tokens_.empty())
 			sentences.push_back(std::move(sentence));
 
+		auto cstart = std::chrono::high_resolution_clock::now();
 		model.build_vocab(sentences);
+		auto cend = std::chrono::high_resolution_clock::now();
+    printf("loadvocab: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
+
+    cstart = cend;
 		model.train(sentences, n_workers);
+		cend = std::chrono::high_resolution_clock::now();
+    printf("train: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
+
+    cstart = cend;
 		model.save("vectors.txt");
+		cend = std::chrono::high_resolution_clock::now();
+    printf("save model: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
 
 //		distance();
 	}
