@@ -266,6 +266,8 @@ struct Word2Vec
 		size_t last_words = 0;
 		auto cstart = std::chrono::high_resolution_clock::now();
 
+		printf("training %d sentences\n", n_sentences);
+
 		#pragma omp parallel for
 		for (size_t i=0; i <n_sentences; ++i) {
 			auto& sentence = sentences[i];
@@ -286,7 +288,8 @@ struct Word2Vec
 			}
 
 			float alpha = std::max(min_alpha, float(alpha0 * (1.0 - 1.0 * current_words / total_words)));
-			size_t words = train_sentence(*sentence, alpha);
+			Vector work(layer1_size_);
+			size_t words = train_sentence(*sentence, alpha, work);
 
 			#pragma omp atomic
 			current_words += words;
@@ -415,7 +418,7 @@ struct Word2Vec
 	}
 
 private:
-	int train_sentence(Sentence& sentence, float alpha) {
+	int train_sentence(Sentence& sentence, float alpha, Vector& work) {
 		const int max_size = 1000;
 		const float max_exp = 6.0;
 		const static std::vector<float> table = [&](){
@@ -440,7 +443,7 @@ private:
 				int word_index = word->index_;
 				auto& l1 = syn0_[word_index];
 
-				Vector work(layer1_size_);
+				std::fill(work.begin(), work.end(), 0);
 				for (size_t b=0; b<codelen; ++b) {
 					int idx = current.points_[b];
 					auto& l2 = syn1_[idx];

@@ -72,6 +72,10 @@ int main(int argc, const char *argv[])
 	};
 
 	bool train = true, test = false;
+	if (argc > 1 && std::string(argv[1]) == "test") {
+		std::swap(train, test);
+	}
+	
 	if (train) {
 		std::vector<SentenceP> sentences;
 

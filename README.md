@@ -8,7 +8,7 @@ See main.cc for building instructions and usage. (NOTE: openmp is used in the ne
 Results with OMP_NUM_THREADS=8: (save model is understandably slow as it stores text)
 
     loadvocab: 1.9952 seconds    
-    train: 36.8596 seconds
+    train: 33.5145 seconds
     save model: 4.7554 seconds
   
   
