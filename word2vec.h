@@ -266,7 +266,7 @@ struct Word2Vec
 		size_t last_words = 0;
 		auto cstart = std::chrono::high_resolution_clock::now();
 
-		#pragma omp parallel for schedule(dynamic, 1) 
+		#pragma omp parallel for
 		for (size_t i=0; i <n_sentences; ++i) {
 			auto& sentence = sentences[i];
 			if (sentence->tokens_.empty()) 
