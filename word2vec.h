@@ -270,11 +270,10 @@ struct Word2Vec
 
 		#pragma omp parallel for
 		for (size_t i=0; i <n_sentences; ++i) {
-			auto& sentence = sentences[i];
+			auto sentence = sentences[i].get();
 			if (sentence->tokens_.empty()) 
 				continue;
 			size_t len = sentence->tokens_.size();
-			sentence->words_.reserve(len);
 			for (size_t i=0; i<len; ++i) {
 				auto it = vocab_.find(sentence->tokens_[i]);
 				if (it == vocab_.end()) continue; 
@@ -284,7 +283,7 @@ struct Word2Vec
 					float rnd = (sqrt(word->count_ / (sample_ * total_words)) + 1) * (sample_ * total_words) / word->count_;
 					if (rnd < rng(eng)) continue;
 				}
-				sentence->words_.push_back(it->second.get());
+				sentence->words_.emplace_back(it->second.get());
 			}
 
 			float alpha = std::max(min_alpha, float(alpha0 * (1.0 - 1.0 * current_words / total_words)));

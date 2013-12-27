@@ -94,6 +94,7 @@ int main(int argc, const char *argv[])
 			sentence->tokens_.push_back(std::move(s));
 			if (count == max_sentence_len) {
 				count = 0;
+				sentence->words_.reserve(sentence->tokens_.size());
 				sentences.push_back(std::move(sentence));
 				sentence.reset(new Sentence);
 			}
