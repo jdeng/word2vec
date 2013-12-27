@@ -13,10 +13,8 @@
 #include <tuple>
 #include <algorithm>
 #include <numeric>
-#include <mutex>
-#include <condition_variable>
-#include <thread>
 #include <random>
+#include <memory>
 #include <fstream>
 #include <sstream>
 
@@ -260,59 +258,17 @@ struct Word2Vec
 		int current_words = 0;
 		float alpha0 = alpha_, min_alpha = min_alpha_;
 
-		typedef std::vector<Sentence *> Job;
-		typedef std::unique_ptr<Job> JobP;
-		std::mutex m;
-		std::condition_variable cond_var;
-		std::list<JobP> jobs;
-
-		volatile bool done = false;
-		auto worker = [&](){
-			while (true) {
-				JobP job;
-				{
-					std::unique_lock<std::mutex> lock(m);
-					while (jobs.empty() && !done)
-						cond_var.wait(lock);
-
-					if (jobs.empty()) break;
-				
-					job = std::move(jobs.front());
-					jobs.pop_front();
-				}
-	
-				if (!job) break;
-				
-				auto cstart = std::chrono::high_resolution_clock::now();
-				float alpha = std::max(min_alpha, float(alpha0 * (1.0 - 1.0 * current_words / total_words)));
-				int words = 0;
-				for (auto sentence: *job) {
-					words += train_sentence(*sentence, alpha);
-				}
-				current_words += words;
-				auto cend = std::chrono::high_resolution_clock::now();
-				auto duration = std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count();
-				printf("training alpha: %.4f progress: %.2f%% words per thread sec: %.3fK\n", alpha, current_words * 100.0/total_words, words * 1000.0 / duration);
-			}
-		};
-
-		auto enqueue_job = [&](JobP&& job) {
-			std::unique_lock<std::mutex> lock(m);
-			jobs.push_back(std::forward<JobP>(job));
-			cond_var.notify_one();
-		};
-
-		std::vector<std::thread> workers;
-		for(int i=0; i<n_workers; ++i)
-			workers.push_back(std::thread(worker));
-	
-		JobP job(new Job);
-		const size_t batch_size = 800;
-
 		std::default_random_engine eng(::time(NULL));
 		std::uniform_real_distribution<float> rng(0.0, 1.0);
 
-		for (auto& sentence: sentences) {
+		size_t n_sentences = sentences.size();
+
+		size_t last_words = 0;
+		auto cstart = std::chrono::high_resolution_clock::now();
+
+		#pragma omp parallel for schedule(dynamic, 1) 
+		for (size_t i=0; i <n_sentences; ++i) {
+			auto& sentence = sentences[i];
 			if (sentence->tokens_.empty()) 
 				continue;
 			size_t len = sentence->tokens_.size();
@@ -329,19 +285,20 @@ struct Word2Vec
 				sentence->words_.push_back(it->second.get());
 			}
 
-			job->push_back(sentence.get());
-			if ( job->size() == batch_size) {
-				enqueue_job(std::move(job));
-				job.reset(new Job);
+			float alpha = std::max(min_alpha, float(alpha0 * (1.0 - 1.0 * current_words / total_words)));
+			size_t words = train_sentence(*sentence, alpha);
+
+			#pragma omp atomic
+			current_words += words;
+
+			if (current_words - last_words > 1024 * 100 || i == n_sentences - 1) {
+				auto cend = std::chrono::high_resolution_clock::now();
+				auto duration = std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count();
+				printf("training alpha: %.4f progress: %.2f%% words per sec: %.3fK\n", alpha, current_words * 100.0/total_words, (current_words - last_words) * 1000.0 / duration);
+				last_words = current_words;
+				cstart = cend;
 			}
 		}
-
-		if (! job->empty())
-			enqueue_job(std::move(job));
-
-		done = true;
-		for (int i=0; i<n_workers; ++i) enqueue_job(JobP());
-		for (auto& t:	workers) t.join();
 
 		syn0norm_ = syn0_;
 		for (auto& v: syn0norm_) v::unit(v);

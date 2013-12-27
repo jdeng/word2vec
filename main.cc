@@ -1,8 +1,5 @@
-// Mac OS X:
-// clang++ -ow2v -march=native -Ofast -funroll-loops -std=c++11 -stdlib=libc++ main.cc
-// g++-4.8 -ow2v -Wa,-q -std=c++0x -Ofast -march=native -funroll-loops  main.cc 
-// Linux:
-// g++ -ow2v -std=c++0x -Ofast -march=native -funroll-loops  main.cc  -lpthread
+// OpenMP is required..
+// g++-4.8 -ow2v -fopenmp -std=c++0x -Ofast -march=native -funroll-loops  main.cc  -lpthread
 
 #include "word2vec.h"
 #include <iostream>
@@ -74,7 +71,7 @@ int main(int argc, const char *argv[])
 		}
 	};
 
-	bool train = false, test = false;
+	bool train = true, test = true;
 	if (train) {
 		std::vector<SentenceP> sentences;
 
