@@ -117,7 +117,7 @@ int main(int argc, const char *argv[])
 	}
 
 	if (test) {
-    auto cstart = std::chrono::high_resolution_clock::now();
+		auto cstart = std::chrono::high_resolution_clock::now();
 		model.load("vectors.txt");
 		auto cend = std::chrono::high_resolution_clock::now();
 		printf("load model: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
