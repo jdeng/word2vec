@@ -117,7 +117,7 @@ int main(int argc, const char *argv[])
 		printf("train: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
 
 		cstart = cend;
-		model.save("vectors.txt");
+		model.save("vectors.bin");
 		cend = std::chrono::high_resolution_clock::now();
 		printf("save model: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
 
@@ -126,7 +126,7 @@ int main(int argc, const char *argv[])
 
 	if (test) {
 		auto cstart = std::chrono::high_resolution_clock::now();
-		model.load("vectors.txt");
+		model.load("vectors.bin");
 		auto cend = std::chrono::high_resolution_clock::now();
 		printf("load model: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
 

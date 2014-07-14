@@ -32,7 +32,7 @@ template <> struct Cvt<std::string> {
 	static const std::string& from_utf8(const std::string& s) { return s; }
 };
 
-#if 1 //gcc-4.8 doesn't support codecvt yet
+#if 0 //gcc-4.8 doesn't support codecvt yet
 #include <codecvt>
 template <> struct Cvt<std::u16string> {
 	static std::string to_utf8(const std::u16string& in) {
@@ -388,6 +388,14 @@ struct Word2Vec
 			words_.push_back(p.first->second.get());
 			syn0_[i] = std::vector<float>{word->feature()->begin(), word->feature()->end()};
 		}
+
+		layer1_size_ = syn0_[0].size();
+		printf("%d words loaded\n", n_words);
+
+		syn0norm_ = syn0_;
+		for (auto& v: syn0norm_) v::unit(v);
+	
+		return 0;
 	}
 
 	int load_text(const std::string& file) {
