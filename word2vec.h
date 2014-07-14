@@ -23,31 +23,55 @@
 
 #include "v.h"
 
-struct Word
-{
-	int32_t index_;
-	std::string text_;
-	uint32_t count_;
-	Word *left_, *right_;
 
-	std::vector<uint8_t> codes_;
-	std::vector<uint32_t> points_;
+template <typename T> struct Cvt;
 
-	Word(int32_t index, std::string text, uint32_t count, Word *left = 0, Word *right = 0) : index_(index), text_(text), count_(count), left_(left), right_(right) {}
-	Word(const Word&) = delete;
-	const Word& operator = (const Word&) = delete;
+template <> struct Cvt<std::string> {
+	static const std::string& to_utf8(const std::string& s) { return s; }
+	static const std::string& from_utf8(const std::string& s) { return s; }
 };
-typedef std::shared_ptr<Word> WordP;
 
-struct Sentence
-{
-	std::vector<Word *> words_;	
-	std::vector<std::string> tokens_;
+#if 0 //gcc-4.8 doesn't support codecvt yet
+#include <codecvt>
+template <> struct Cvt<std::u16string> {
+	static std::string to_utf8(const std::u16string& in) {
+	    std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> cv;
+    	return cv.to_bytes(in.data());
+	}
+
+	static std::u16string from_utf8(const std::string& in) {
+	    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> cv; 
+    	return cv.from_bytes(in.data()); 
+	}
 };
-typedef std::shared_ptr<Sentence> SentenceP;
+#endif
 
+template <class String = std::string>
 struct Word2Vec
 {
+	struct Word
+	{
+		int32_t index_;
+		String text_;
+		uint32_t count_;
+		Word *left_, *right_;
+	
+		std::vector<uint8_t> codes_;
+		std::vector<uint32_t> points_;
+	
+		Word(int32_t index, String text, uint32_t count, Word *left = 0, Word *right = 0) : index_(index), text_(text), count_(count), left_(left), right_(right) {}
+		Word(const Word&) = delete;
+		const Word& operator = (const Word&) = delete;
+	};
+	typedef std::shared_ptr<Word> WordP;
+	
+	struct Sentence
+	{
+		std::vector<Word *> words_;	
+		std::vector<String> tokens_;
+	};
+	typedef std::shared_ptr<Sentence> SentenceP;
+
 	std::vector<Vector> syn0_, syn1_;
 	std::vector<Vector> syn0norm_;
 
@@ -55,7 +79,7 @@ struct Word2Vec
 	std::vector<Vector> syn1neg_;
 	std::vector<int> unigram_;
 
-	std::unordered_map<std::string, WordP> vocab_;
+	std::unordered_map<String, WordP> vocab_;
 	std::vector<Word *> words_;
 
 	int layer1_size_;
@@ -79,26 +103,26 @@ struct Word2Vec
 	{}
 
 
-	bool has(const std::string& w) const { return vocab_.find(w) != vocab_.end(); }
+	bool has(const String& w) const { return vocab_.find(w) != vocab_.end(); }
 
 	int build_vocab(std::vector<SentenceP>& sentences) {
 		size_t count = 0;
-		std::unordered_map<std::string, int> vocab;
-		auto progress = [&count](const char *type, const std::unordered_map<std::string, int>& vocab) {
+		std::unordered_map<String, int> vocab;
+		auto progress = [&count](const char *type, const std::unordered_map<String, int>& vocab) {
 			printf("collecting [%s] %lu sentences, %lu distinct %ss, %d %ss\n", type, count, vocab.size(), type, 
-				std::accumulate(vocab.begin(), vocab.end(), 0, [](int x, const std::pair<std::string, int>& v) { return x + v.second; }), type);
+				std::accumulate(vocab.begin(), vocab.end(), 0, [](int x, const std::pair<String, int>& v) { return x + v.second; }), type);
 		};
 
 		for (auto& sentence: sentences) {
 			++count;
 			if (count % 10000 == 0) progress("word", vocab);
 
-			std::string last_token;
+			String last_token;
 			for (auto& token: sentence->tokens_) {
 				vocab[token] += 1;
 				// add bigram phrases
 				if (phrase_) {
-					if(!last_token.empty()) vocab[last_token + "_" + token] += 1;
+					if(!last_token.empty()) vocab[last_token + Cvt<String>::from_utf8("_") + token] += 1;
 					last_token = token;
 				}
 			}
@@ -107,21 +131,21 @@ struct Word2Vec
 
 		if (phrase_) {
 			count = 0;
-			int total_words = std::accumulate(vocab.begin(), vocab.end(), 0, [](int x, const std::pair<std::string, int>& v) { return x + v.second; });
+			int total_words = std::accumulate(vocab.begin(), vocab.end(), 0, [](int x, const std::pair<String, int>& v) { return x + v.second; });
 
-			std::unordered_map<std::string, int> phrase_vocab;
+			std::unordered_map<String, int> phrase_vocab;
 
 			for (auto& sentence: sentences) {
 				++count;
 				if (count % 10000 == 0) progress("phrase", phrase_vocab);
 				
-				std::vector<std::string> phrase_tokens;
-				std::string last_token;
+				std::vector<String> phrase_tokens;
+				String last_token;
 				uint32_t pa = 0, pb = 0, pab = 0;
 				for (auto& token: sentence->tokens_) {
 					pb = vocab[token];
 					if (!	last_token.empty()) {
-						std::string phrase = last_token + "_" + token;	
+						String phrase = last_token + Cvt<String>::from_utf8("_") + token;	
 						pab = vocab[phrase];
 						float score = 0;
 						if (pa >= min_count_ && pb >= min_count_ && pab >= min_count_)
@@ -183,7 +207,7 @@ struct Word2Vec
 			auto min1 = heap.back(); heap.pop_back();
 			std::pop_heap(heap.begin(), heap.end(), comp);
 			auto min2 = heap.back(); heap.pop_back();
-			tmp.emplace_back(WordP(new Word{i + n_words, "", min1->count_ + min2->count_, min1, min2}));
+			tmp.emplace_back(WordP(new Word{i + n_words, Cvt<String>::from_utf8(""), min1->count_ + min2->count_, min1, min2}));
 
 			heap.push_back(tmp.back().get());
 			std::push_heap(heap.begin(), heap.end(), comp);
@@ -254,7 +278,7 @@ struct Word2Vec
 
 	int train(std::vector<SentenceP>& sentences, int n_workers) {
 		int total_words = std::accumulate(vocab_.begin(), vocab_.end(), 0, 
-			[](int x, const std::pair<std::string, WordP>& p) { return (int)(x + p.second->count_); });
+			[](int x, const std::pair<String, WordP>& p) { return (int)(x + p.second->count_); });
 		int current_words = 0;
 		float alpha0 = alpha_, min_alpha = min_alpha_;
 
@@ -316,7 +340,7 @@ struct Word2Vec
 		std::sort(words.begin(), words.end(), [](Word *w1, Word *w2) { return w1->count_ > w2->count_; });
 
 		for (auto w: words) {
-			out << w->text_;
+			out << Cvt<String>::to_utf8(w->text_);
 			for (auto i: syn0_[w->index_]) out << " " << i;
 			out << std::endl;
 		}
@@ -342,7 +366,7 @@ struct Word2Vec
 			std::string text;
 			iss >> text;
 
-			auto p = vocab_.emplace(text, WordP(new Word{i, text, 0}));
+			auto p = vocab_.emplace(Cvt<String>::from_utf8(text), WordP(new Word{i, Cvt<String>::from_utf8(text), 0}));
 			words_.push_back(p.first->second.get());
 			syn0_[i].resize(layer1_size);
 			for(int j=0; j<layer1_size; ++j) {
@@ -359,12 +383,12 @@ struct Word2Vec
 		return 0;	
 	}
 
-	std::vector<std::pair<std::string,float>> most_similar(std::vector<std::string> positive, std::vector<std::string> negative, int topn) {
-		if ((positive.empty() && negative.empty()) || syn0norm_.empty()) return std::vector<std::pair<std::string,float>>{};
+	std::vector<std::pair<String,float>> most_similar(std::vector<String> positive, std::vector<String> negative, int topn) {
+		if ((positive.empty() && negative.empty()) || syn0norm_.empty()) return std::vector<std::pair<String,float>>{};
 
 		Vector mean(layer1_size_);
 		std::vector<int> all_words;
-		auto add_word = [&mean, &all_words, this](const std::string& w, float weight) {
+		auto add_word = [&mean, &all_words, this](const String& w, float weight) {
 			auto it = vocab_.find(w);		
 			if (it == vocab_.end()) return;
 
@@ -405,7 +429,7 @@ struct Word2Vec
 		 
 		std::sort_heap(first, last, comp);
 
-		std::vector<std::pair<std::string,float>> results;
+		std::vector<std::pair<String,float>> results;
 		for(int i=0, j=0; i<k; ++i) {
 			if (std::find(all_words.begin(), all_words.end(), indexes[i]) != all_words.end())
 				continue;
@@ -501,7 +525,7 @@ private:
 		return count;
 	}
 
-	float similarity(const std::string& w1, const std::string& w2) const {
+	float similarity(const String& w1, const String& w2) const {
 		auto it1 = vocab_.find(w1), it2 = vocab_.find(w2);
 		if (it1 != vocab_.end() && it2 != vocab_.end())
 			return v::dot(syn0_[it1->second->index_], syn0_[it2->second->index_]);

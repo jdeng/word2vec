@@ -5,7 +5,7 @@
 #include <iostream>
 #include <initializer_list>
 
-int accuracy(Word2Vec& model, std::string questions, int restrict_vocab = 30000) {
+int accuracy(Word2Vec<std::string>& model, std::string questions, int restrict_vocab = 30000) {
 	std::ifstream in(questions);
 	std::string line;
 	auto lower = [](std::string& data) { std::transform(data.begin(), data.end(), data.begin(), ::tolower);};
@@ -49,7 +49,10 @@ int accuracy(Word2Vec& model, std::string questions, int restrict_vocab = 30000)
 
 int main(int argc, const char *argv[])
 {
-	Word2Vec model(200);
+	Word2Vec<std::string> model(200);
+	using Sentence = Word2Vec<std::string>::Sentence;
+	using SentenceP = Word2Vec<std::string>::SentenceP;
+
 	model.sample_ = 0;
 //	model.window_ = 10;
 //	model.phrase_ = true;
