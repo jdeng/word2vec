@@ -23,6 +23,7 @@
 
 #include "v.h"
 
+#include "model_generated.h"
 
 template <typename T> struct Cvt;
 
@@ -31,7 +32,7 @@ template <> struct Cvt<std::string> {
 	static const std::string& from_utf8(const std::string& s) { return s; }
 };
 
-#if 0 //gcc-4.8 doesn't support codecvt yet
+#if 1 //gcc-4.8 doesn't support codecvt yet
 #include <codecvt>
 template <> struct Cvt<std::u16string> {
 	static std::string to_utf8(const std::u16string& in) {
@@ -333,6 +334,26 @@ struct Word2Vec
 	}
 
 	int save(const std::string& file) const {
+		flatbuffers::FlatBufferBuilder fbb;
+
+		std::vector<Word *> words = words_;
+		std::sort(words.begin(), words.end(), [](Word *w1, Word *w2) { return w1->count_ > w2->count_; });
+
+		std::vector<flatbuffers::Offset<ccseg::Word>> ws;
+		for (auto w: words) {
+			auto name = fbb.CreateString(Cvt<String>::to_utf8(w->text_));
+			ws.push_back(ccseg::CreateWord(fbb, name, fbb.CreateVector(syn0_[w->index_])));
+		}
+		
+		auto dict = ccseg::CreateDict(fbb, fbb.CreateVector(ws.data(), ws.size()));
+		fbb.Finish(dict);
+
+		std::ofstream out(file, std::ofstream::out | std::ofstream::binary);
+		out.write((const char *)fbb.GetBufferPointer(), fbb.GetSize());
+		return 0;
+	}
+
+	int save_text(const std::string& file) const {
 		std::ofstream out(file, std::ofstream::out);
 		out << syn0_.size() << " " << syn0_[0].size() << std::endl;
 		
@@ -349,6 +370,27 @@ struct Word2Vec
 	}
 
 	int load(const std::string& file) {
+		std::ifstream in(file, std::ifstream::binary);
+		std::stringstream ss;
+		ss << in.rdbuf();
+		std::string s = ss.str();
+
+		const ccseg::Dict *dict = ccseg::GetDict(s.data());
+		size_t n_words = dict->words()->Length();
+
+		syn0_.clear(); vocab_.clear(); words_.clear();
+		syn0_.resize(n_words);
+			
+		for (int i=0; i<n_words; ++i) {
+			const auto *word = dict->words()->Get(i);
+			auto name = Cvt<String>::from_utf8(word->name()->c_str());
+			auto p = vocab_.emplace(name, std::make_shared<Word>(i, name, 0));
+			words_.push_back(p.first->second.get());
+			syn0_[i] = std::vector<float>{word->feature()->begin(), word->feature()->end()};
+		}
+	}
+
+	int load_text(const std::string& file) {
 		std::ifstream in(file);
 		std::string line;
 		if (! std::getline(in, line)) return -1;
