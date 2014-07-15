@@ -13,7 +13,8 @@ using Model = Word2Vec<std::u16string>;
 using Sentence = Model::Sentence;
 using SentenceP = Model::SentenceP;
 
-std::vector<SentenceP> load_sentences(const std::string& path) {
+const std::u16string MARKER = u"#m#";
+std::vector<SentenceP> load_sentences(const std::string& path, bool with_marker, bool with_tag) {
 	auto is_word = [](char16_t ch) { return ch >= 0x4e00 && ch <= 0x9fff; };
 	auto close_tag = [](SentenceP& sentence) {
 		Model::Tag& t = sentence->tags_.back();
@@ -35,36 +36,70 @@ std::vector<SentenceP> load_sentences(const std::string& path) {
 			std::u16string us = Cvt<std::u16string>::from_utf8(s);
 			for (auto ch: us) {
 				if (is_word(ch)) {
+					if (sentence->tokens_.empty() && with_marker) 
+						sentence->tokens_.push_back(MARKER);
 					sentence->tokens_.push_back(std::u16string(1, ch));
-					if (sentence->tags_.empty())
-						sentence->tags_.push_back(Model::B);
-					else {
-						auto& t = sentence->tags_.back();
-						Model::Tag nt = (t == Model::S|| t == Model::E)? Model::B: Model::M;
-						sentence->tags_.push_back(nt);
+
+					if (with_tag) {
+						if (sentence->tags_.empty())
+							sentence->tags_.push_back(Model::B);
+						else {
+							auto& t = sentence->tags_.back();
+							Model::Tag nt = (t == Model::S|| t == Model::E)? Model::B: Model::M;
+							sentence->tags_.push_back(nt);
+						}
 					}
 				}
 				if (! is_word(ch) || sentence->tokens_.size() == max_sentence_len) {
 					if (sentence->tokens_.empty()) continue;
-					close_tag(sentence);
+					if (with_tag) close_tag(sentence);
 
 					if (ch == u'，' || ch == u'、') continue;
+					if (with_marker) sentence->tokens_.push_back(MARKER);
 					sentence->words_.reserve(sentence->tokens_.size());
 					sentences.push_back(std::move(sentence));
 					sentence.reset(new Sentence);
 				}
 			}
 
-			if (!sentence->tokens_.empty()) close_tag(sentence);
+			if (!sentence->tokens_.empty() && with_tag) close_tag(sentence);
 		}
 		
 		if (!sentence->tokens_.empty()) {
-			close_tag(sentence);
+			if (with_tag) close_tag(sentence);
+			if (with_marker) sentence->tokens_.push_back(MARKER);
 			sentences.push_back(std::move(sentence));
 		}
 
 	return sentences;
 }
+
+std::vector<Vector> generate_samples(const Model& model, const SentenceP& sentence, int window = 5) {
+	const std::vector<float>& marker = model.word_vector(MARKER);
+	if (marker.empty()) return std::vector<Vector>{};
+
+	size_t n_tokens = sentence->tokens_.size();
+	size_t vecsize = model.word_vector_size();
+	Vector tmp((n_tokens + window) * vecsize);
+	for (int i=0; i<window/2; ++i) 
+		std::copy(marker.begin(), marker.end(), tmp.data() + i * vecsize);
+	for (size_t i=0; i<n_tokens; ++i) {
+		auto& s = sentence->tokens_[i];
+		auto& w = model.word_vector(s);
+		auto& cur = (w.empty()? marker: w);
+		std::copy(cur.begin(), cur.end(), tmp.data() + (i + window/2) * vecsize);
+	}
+	for (int i=0; i<window/2; ++i) 
+		std::copy(marker.begin(), marker.end(), tmp.data() + (i + window/2 + n_tokens) * vecsize);
+
+	std::vector<Vector> samples;
+	samples.reserve(n_tokens);
+	for (size_t i=0; i<n_tokens; ++i)
+		samples.emplace_back(tmp.data() + i * vecsize, tmp.data() + (i + window) * vecsize);
+
+	return samples;
+}
+
 
 int main(int argc, const char *argv[])
 {
@@ -94,7 +129,7 @@ int main(int argc, const char *argv[])
 	bool train = true, test = true;
 
 	if (train) {
-		std::vector<SentenceP> sentences = load_sentences(argv[1]);
+		std::vector<SentenceP> sentences = load_sentences(argv[1], true, false);
 
 #if 0
 		for (size_t i=0; i<sentences.size(); i += 1000) {
@@ -137,10 +172,10 @@ int main(int argc, const char *argv[])
 		int window = 5;
 		model.load("vectors.bin");
 
-		std::vector<SentenceP> sentences = load_sentences(argv[1]);
+		std::vector<SentenceP> sentences = load_sentences(argv[1], false, true);
 		std::vector<Vector> inputs, targets;
 		for (auto& sentence: sentences) {
-			auto samples = model.generate_samples(sentence, window);
+			auto samples = generate_samples(model, sentence, window);
 			std::move(samples.begin(), samples.end(), std::back_inserter(inputs));
 			auto& tags = sentence->tags_;
 			for (auto t: tags) {

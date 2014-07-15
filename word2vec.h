@@ -458,29 +458,14 @@ struct Word2Vec
 		return 0;	
 	}
 
-	std::vector<std::vector<float>> generate_samples(const SentenceP& sentence, int window = 5) {
-		size_t n_tokens = sentence->tokens_.size();
-		std::vector<float> tmp((n_tokens + window) * layer1_size_);
-
-		std::vector<float> edge;
-		for (int i=0; i<window/2; ++i) 
-			std::copy(edge.begin(), edge.end(), tmp.data() + i * layer1_size_);
-		for (size_t i=0; i<n_tokens; ++i) {
-			auto& s = sentence->tokens_[i];
-			auto it = vocab_.find(s);
-			auto& cur = (it == vocab_.end()? edge : syn0_[it->second->index_]);
-			std::copy(cur.begin(), cur.end(), tmp.data() + (i + window/2) * layer1_size_);
-		}
-		for (int i=0; i<window/2; ++i) 
-			std::copy(edge.begin(), edge.end(), tmp.data() + (i + window/2 + n_tokens) * layer1_size_);
-
-		std::vector<std::vector<float>> samples;
-		samples.reserve(n_tokens);
-		for (size_t i=0; i<n_tokens; ++i)
-			samples.emplace_back(tmp.data() + i * layer1_size_, tmp.data() + (i + window) * layer1_size_);
-
-		return samples;
+	const Vector& word_vector(const String& w) const {
+		static Vector nil;
+		auto it = vocab_.find(w);
+		if (it == vocab_.end()) return nil;
+		return syn0_[it->second->index_];
 	}
+
+	size_t word_vector_size() const { return layer1_size_; }
 
 	std::vector<std::pair<String,float>> most_similar(std::vector<String> positive, std::vector<String> negative, int topn) {
 		if ((positive.empty() && negative.empty()) || syn0norm_.empty()) return std::vector<std::pair<String,float>>{};
