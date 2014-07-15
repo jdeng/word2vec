@@ -118,6 +118,7 @@ int main(int argc, const char *argv[])
 
 		cstart = cend;
 		model.save("vectors.bin");
+		model.save_text("vectors.txt");
 		cend = std::chrono::high_resolution_clock::now();
 		printf("save model: %.4f seconds\n", std::chrono::duration_cast<std::chrono::microseconds>(cend - cstart).count() / 1000000.0);
 

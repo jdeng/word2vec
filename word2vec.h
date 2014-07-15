@@ -32,7 +32,7 @@ template <> struct Cvt<std::string> {
 	static const std::string& from_utf8(const std::string& s) { return s; }
 };
 
-#if 0 //gcc-4.8 doesn't support codecvt yet
+#if defined(_LIBCPP_BEGIN_NAMESPACE_STD)
 #include <codecvt>
 template <> struct Cvt<std::u16string> {
 	static std::string to_utf8(const std::u16string& in) {
@@ -43,6 +43,21 @@ template <> struct Cvt<std::u16string> {
 	static std::u16string from_utf8(const std::string& in) {
 	    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> cv; 
     	return cv.from_bytes(in.data()); 
+	}
+};
+#else // gcc has no <codecvt>
+#include "utf8cpp/utf8.h"
+template <> struct Cvt<std::u16string> {
+	static std::string to_utf8(const std::u16string& in) {
+		std::string out;
+		utf8::utf16to8(in.begin(), in.end(), std::back_inserter(out));
+		return out;
+	}
+
+	static std::u16string from_utf8(const std::string& in) {
+		std::u16string out;
+		utf8::utf8to16(in.begin(), in.end(), std::back_inserter(out));
+		return out;
 	}
 };
 #endif
@@ -339,13 +354,13 @@ struct Word2Vec
 		std::vector<Word *> words = words_;
 		std::sort(words.begin(), words.end(), [](Word *w1, Word *w2) { return w1->count_ > w2->count_; });
 
-		std::vector<flatbuffers::Offset<ccseg::Word>> ws;
+		std::vector<flatbuffers::Offset<word2vec::Word>> ws;
 		for (auto w: words) {
 			auto name = fbb.CreateString(Cvt<String>::to_utf8(w->text_));
-			ws.push_back(ccseg::CreateWord(fbb, name, fbb.CreateVector(syn0_[w->index_])));
+			ws.push_back(word2vec::CreateWord(fbb, name, fbb.CreateVector(syn0_[w->index_])));
 		}
 		
-		auto dict = ccseg::CreateDict(fbb, fbb.CreateVector(ws.data(), ws.size()));
+		auto dict = word2vec::CreateDict(fbb, fbb.CreateVector(ws.data(), ws.size()));
 		fbb.Finish(dict);
 
 		std::ofstream out(file, std::ofstream::out | std::ofstream::binary);
@@ -375,7 +390,7 @@ struct Word2Vec
 		ss << in.rdbuf();
 		std::string s = ss.str();
 
-		const ccseg::Dict *dict = ccseg::GetDict(s.data());
+		const word2vec::Dict *dict = word2vec::GetDict(s.data());
 		size_t n_words = dict->words()->Length();
 
 		syn0_.clear(); vocab_.clear(); words_.clear();

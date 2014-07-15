@@ -1,4 +1,4 @@
-namespace ccseg;
+namespace word2vec;
 
 table Word {
   name: string;
