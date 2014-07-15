@@ -65,6 +65,16 @@ template <> struct Cvt<std::u16string> {
 template <class String = std::string>
 struct Word2Vec
 {
+	enum Tag { S, B, M, E };
+	static const char *tag_string(Tag t) {
+		switch(t) {
+		case S: return "S";
+		case B: return "B";
+		case M: return "M";
+		case E: return "E";
+		}
+	}
+
 	struct Word
 	{
 		int32_t index_;
@@ -85,6 +95,7 @@ struct Word2Vec
 	{
 		std::vector<Word *> words_;	
 		std::vector<String> tokens_;
+		std::vector<Tag> tags_;
 	};
 	typedef std::shared_ptr<Sentence> SentenceP;
 

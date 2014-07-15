@@ -1,5 +1,5 @@
 // OpenMP is required..
-// g++-4.8 -ozh -fopenmp -std=c++0x -Ofast -march=native -funroll-loops  zh.cc  -lpthread
+// g++-4.8 -ozh -fopenmp -std=c++0x -Ofast -march=native -funroll-loops  main_zh.cc  -lpthread
 
 #include <iostream>
 #include <initializer_list>
@@ -7,14 +7,14 @@
 #include <set>
 
 #include "word2vec.h"
-#include "chars_zh.h"
 
 int main(int argc, const char *argv[])
 {
-	Word2Vec<std::u16string> model(200);
-	using Sentence = Word2Vec<std::u16string>::Sentence;
-	using SentenceP = Word2Vec<std::u16string>::SentenceP;
+	using Model = Word2Vec<std::u16string>;
+	using Sentence = Model::Sentence;
+	using SentenceP = Model::SentenceP;
 
+	Model model(200);
 	model.sample_ = 0;
     model.min_count_ = 3;
 //	model.window_ = 10;
@@ -39,6 +39,7 @@ int main(int argc, const char *argv[])
 
 	bool train = true, test = true;
 
+	auto is_word = [](char16_t ch) { return ch >= 0x4e00 && ch <= 0x9fff; };
 	if (train) {
 		std::vector<SentenceP> sentences;
 
@@ -54,21 +55,46 @@ int main(int argc, const char *argv[])
 			
 			std::u16string us = Cvt<std::u16string>::from_utf8(s);
 			for (auto ch: us) {
-				if (is_word(ch))
+				if (is_word(ch)) {
 					sentence->tokens_.push_back(std::u16string(1, ch));
+					if (sentence->tags_.empty())
+						sentence->tags_.push_back(Model::B);
+					else {
+						auto& t = sentence->tags_.back();
+						Model::Tag nt = (t == Model::S|| t == Model::E)? Model::B: Model::M;
+						sentence->tags_.push_back(nt);
+					}
+				}
 				if (! is_word(ch) || sentence->tokens_.size() == max_sentence_len) {
-					if (ch == ' ' || sentence->tokens_.empty()) 
-						continue;
+					if (sentence->tokens_.empty()) continue;
+
+					Model::Tag& t = sentence->tags_.back();
+					if (t == Model::B) t = Model::S;
+					else if (t == Model::M) t = Model::E;
+
+					if (ch == u'，') continue;
 					sentence->words_.reserve(sentence->tokens_.size());
 					sentences.push_back(std::move(sentence));
 					sentence.reset(new Sentence);
-					continue;
 				}
+			}
+
+			if (!sentence->tokens_.empty()) {
+				Model::Tag& t = sentence->tags_.back();
+				if (t == Model::B) t = Model::S;
+				else if (t == Model::M) t = Model::E;
 			}
 		}
 		
 		if (!sentence->tokens_.empty())
 			sentences.push_back(std::move(sentence));
+#if 0
+		for (size_t i=0; i<sentences.size(); i += 1000) {
+			auto s = sentences[i];
+			for (auto w: s->tokens_) std::cout << Cvt<std::u16string>::to_utf8(w); std::cout << std::endl;
+			for (auto t: s->tags_) std::cout << Model::tag_string(t); std::cout << std::endl;
+		}
+#endif
 
 		std::cout << sentences.size() << " sentences, " << std::accumulate(sentences.begin(), sentences.end(), (int)0, [](int x, const SentenceP& s) { return x + s->tokens_.size(); }) << " words loaded" << std::endl;
 
