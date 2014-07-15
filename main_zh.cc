@@ -40,6 +40,12 @@ int main(int argc, const char *argv[])
 	bool train = true, test = true;
 
 	auto is_word = [](char16_t ch) { return ch >= 0x4e00 && ch <= 0x9fff; };
+	auto close_tag = [](SentenceP& sentence) {
+		Model::Tag& t = sentence->tags_.back();
+		if (t == Model::B) t = Model::S;
+		else if (t == Model::M) t = Model::E;
+	};
+
 	if (train) {
 		std::vector<SentenceP> sentences;
 
@@ -67,27 +73,22 @@ int main(int argc, const char *argv[])
 				}
 				if (! is_word(ch) || sentence->tokens_.size() == max_sentence_len) {
 					if (sentence->tokens_.empty()) continue;
+					close_tag(sentence);
 
-					Model::Tag& t = sentence->tags_.back();
-					if (t == Model::B) t = Model::S;
-					else if (t == Model::M) t = Model::E;
-
-					if (ch == u'，') continue;
+					if (ch == u'，' || ch == u'、') continue;
 					sentence->words_.reserve(sentence->tokens_.size());
 					sentences.push_back(std::move(sentence));
 					sentence.reset(new Sentence);
 				}
 			}
 
-			if (!sentence->tokens_.empty()) {
-				Model::Tag& t = sentence->tags_.back();
-				if (t == Model::B) t = Model::S;
-				else if (t == Model::M) t = Model::E;
-			}
+			if (!sentence->tokens_.empty()) close_tag(sentence);
 		}
 		
-		if (!sentence->tokens_.empty())
+		if (!sentence->tokens_.empty()) {
+			close_tag(sentence);
 			sentences.push_back(std::move(sentence));
+		}
 #if 0
 		for (size_t i=0; i<sentences.size(); i += 1000) {
 			auto s = sentences[i];
