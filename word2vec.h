@@ -65,7 +65,7 @@ template <> struct Cvt<std::u16string> {
 template <class String = std::string>
 struct Word2Vec
 {
-	enum Tag { S, B, M, E };
+	enum Tag { S = 0, B, M, E };
 	static const char *tag_string(Tag t) {
 		switch(t) {
 		case S: return "S";
@@ -128,7 +128,6 @@ struct Word2Vec
 	, alpha_(alpha), min_alpha_(min_alpha) 
 	, phrase_(false), phrase_threshold_(100)
 	{}
-
 
 	bool has(const String& w) const { return vocab_.find(w) != vocab_.end(); }
 
@@ -457,6 +456,30 @@ struct Word2Vec
 		for (auto& v: syn0norm_) v::unit(v);
 		
 		return 0;	
+	}
+
+	std::vector<std::vector<float>> generate_samples(const SentenceP& sentence, int window = 5) {
+		size_t n_tokens = sentence->tokens_.size();
+		std::vector<float> tmp((n_tokens + window) * layer1_size_);
+
+		std::vector<float> edge;
+		for (int i=0; i<window/2; ++i) 
+			std::copy(edge.begin(), edge.end(), tmp.data() + i * layer1_size_);
+		for (size_t i=0; i<n_tokens; ++i) {
+			auto& s = sentence->tokens_[i];
+			auto it = vocab_.find(s);
+			auto& cur = (it == vocab_.end()? edge : syn0_[it->second->index_]);
+			std::copy(cur.begin(), cur.end(), tmp.data() + (i + window/2) * layer1_size_);
+		}
+		for (int i=0; i<window/2; ++i) 
+			std::copy(edge.begin(), edge.end(), tmp.data() + (i + window/2 + n_tokens) * layer1_size_);
+
+		std::vector<std::vector<float>> samples;
+		samples.reserve(n_tokens);
+		for (size_t i=0; i<n_tokens; ++i)
+			samples.emplace_back(tmp.data() + i * layer1_size_, tmp.data() + (i + window) * layer1_size_);
+
+		return samples;
 	}
 
 	std::vector<std::pair<String,float>> most_similar(std::vector<String> positive, std::vector<String> negative, int topn) {
