@@ -7,9 +7,6 @@
 #include <set>
 #include <vector>
 
-// #include <Magick++.h>
-// #include "spectrum.inl"
-
 #include "word2vec.h"
 #include "rbm.h"
 
@@ -189,13 +186,6 @@ int main(int argc, const char *argv[])
 		distance();
 	}
 
-#if 0
-    // initialize pallet
-    Magick::InitializeMagick(*argv);
-    std::vector<Magick::Color> pallet;
-    for (auto& rgb: _pallet) pallet.push_back(Magick::Color(rgb.r, rgb.g, rgb.b));
-#endif
-
 	bool build_net = true;
 	if (build_net) {
 		int window = 5;
@@ -214,72 +204,6 @@ int main(int argc, const char *argv[])
 			}
 		}
 		standardize(inputs);
-
-		std::cout << inputs.size() << " inputs, " << targets.size() << " targets." << std::endl;
-		for (size_t i=0; i<100000; i+= 1000) {
-			std::cout << i << ":";
-			for (auto& x: inputs[i]) std::cout << x << ", "; std::cout << std::endl;
-			for (auto& x: targets[i]) std::cout << x << ", "; std::cout << std::endl;
-			std::cout << std::endl;
-		}
-
-		auto progress = [&](DeepBeliefNet& dbn) {
-			static int i = 0;
-			std::string name = "dbn-" + std::to_string(i++);
-			std::ofstream f(name + ".dat", std::ofstream::binary);
-
-#if 0
-		int width = 0, height = 0;
-		Vector pixels;
-		dbn.to_image(pixels, width, height);
-
-		Magick::Image img(Magick::Geometry(width * 2, height * 2), Magick::Color(255,255,255));
-		for (size_t x=0; x < width * 2; ++x) {
-				for (size_t y=0; y < height * 2; ++y) {
-					int i =  int(abs(pixels[int(y / 2 * width + x / 2)] * 255));
-					if (i > 255 || i < 0) i = 255;
-					img.pixelColor(x, y, pallet[i]);
-				}
-		}
-		std::string fn = name + ".png";
-		img.write(fn.c_str());
-#endif
-
-			dbn.store(f);
-		};
-	
-		DeepBeliefNet dbn;
-
-		dbn.build(std::vector<int>{(int)inputs[0].size(), 500, 300, 4});
-//		dbn.rbms_[0]->continuous_ = true;
-		auto& rbm = dbn.output_layer();
-		rbm->type_ = RBM::Type::EXP;
-
-	  	std::default_random_engine eng(::time(NULL));
-  		std::normal_distribution<double> rng(0.0, 1.0);
-
-		LRBM::Conf conf;
-
-		bool resume = false;
-		if (resume) {
-			std::ifstream f("dbn.dat", std::ifstream::binary);
-			dbn.load(f);
-			conf.max_epoch_ = 2; conf.max_batches_ = 300; conf.batch_size_ = 200;
-		}
-		else {
-			conf.max_epoch_ = 5; conf.max_batches_ = 300; conf.batch_size_ = 200;
-			dbn.pretrain(inputs, conf, progress);
-		}
-
-		conf.max_epoch_ = 10; conf.max_batches_ /= 5; conf.batch_size_ *= 5;
-		dbn.backprop(inputs, targets, conf, progress);
-
-		std::ofstream f("dbn.dat", std::ofstream::binary);
-		dbn.store(f);
-	}
-
-	bool test_net = false;
-	if (test_net) {
 	}
 
 	return 0;
