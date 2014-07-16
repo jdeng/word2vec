@@ -61,6 +61,21 @@ namespace v {
 		while (--m >= 0) (*xd++) /= len;
 	}
 
+	inline void add(Vector& x, const Vector& y) {
+		int m = x.size(); float *xd = x.data(); const float *yd = y.data();
+		while (--m >= 0) (*xd++) += (*yd++);
+	}
+
+	inline void sax2(Vector& x, const Vector& y) {
+		int m = x.size(); float *xd = x.data(); const float *yd = y.data();
+		while (--m >= 0) { (*xd++) += (*yd) * (*yd); yd++; }
+	}
+
+	inline void multiply(Vector& x, const Vector& y) {
+		int m = x.size(); float *xd = x.data(); const float *yd = y.data();
+		while (--m >= 0) { (*xd++) *= (*yd++); }
+	}
+
 	inline bool isfinite(const Vector& x) { 
 		for(auto const& i: x) { if (! std::isfinite(i)) return false; } 
 		return true;
