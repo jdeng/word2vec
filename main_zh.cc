@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "word2vec.h"
-#include "rbm.h"
 
 using Model = Word2Vec<std::u16string>;
 using Sentence = Model::Sentence;
