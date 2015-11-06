@@ -89,7 +89,10 @@ template <class String = std::string>
       std::vector<uint8_t> codes_;
       std::vector<uint32_t> points_;
 
-    Word(int32_t index, String text, uint32_t count, Word *left = 0, Word *right = 0) : index_(index), text_(text), count_(count), left_(left), right_(right) {}
+    Word(int32_t index, String text, uint32_t count, Word *left = nullptr, Word *right = nullptr):
+      index_(index), text_(text), count_(count), left_(left), right_(right)
+      {}
+
       Word(const Word&) = delete;
       const Word& operator = (const Word&) = delete;
     };
@@ -127,13 +130,16 @@ template <class String = std::string>
     bool phrase_;
     float phrase_threshold_;
 
-  Word2Vec(int size = 100, int window = 5, float sample = 0.001, int min_count = 5, int negative = 0, float alpha = 0.025, float min_alpha = 0.0001)
-  :layer1_size_(size), window_(window), sample_(sample), min_count_(min_count), negative_(negative)
-      , alpha_(alpha), min_alpha_(min_alpha)
-      , phrase_(false), phrase_threshold_(100)
+  Word2Vec(int size = 100, int window = 5, float sample = 0.001, int min_count = 5, \
+	   int negative = 0, float alpha = 0.025, float min_alpha = 0.0001)
+  :layer1_size_(size), window_(window), sample_(sample), min_count_(min_count), \
+      negative_(negative), alpha_(alpha), min_alpha_(min_alpha), phrase_(false), \
+      phrase_threshold_(100)
     {}
 
-    bool has(const String& w) const { return vocab_.find(w) != vocab_.end(); }
+    bool has(const String& w) const {
+      return vocab_.find(w) != vocab_.end();
+    }
 
     int build_vocab(std::vector<SentenceP>& sentences) {
       size_t count = 0;
@@ -323,7 +329,7 @@ template <class String = std::string>
       printf("training %zd sentences\n", n_sentences);
 
 #pragma omp parallel for
-      for (size_t i=0; i <n_sentences; ++i) {
+      for (size_t i = 0; i < n_sentences; ++i) {
 	auto sentence = sentences[i].get();
 	if (sentence->tokens_.empty())
 	  continue;

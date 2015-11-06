@@ -54,10 +54,6 @@ int main(int argc, const char *argv[])
   using SentenceP = Word2Vec<std::string>::SentenceP;
 
   model.sample_ = 0;
-  //	model.window_ = 10;
-  //	model.phrase_ = true;
-  // int n_workers = 4;
-
   ::srand(::time(NULL));
 
   auto distance = [&model]() {
@@ -141,4 +137,3 @@ int main(int argc, const char *argv[])
 
   return 0;
 }
-
