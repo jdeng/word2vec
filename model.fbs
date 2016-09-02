@@ -1,0 +1,12 @@
+namespace word2vec;
+
+table Word {
+  name: string;
+  feature: [float];
+}
+
+table Dict {
+  words: [Word];
+}
+
+root_type Dict;
