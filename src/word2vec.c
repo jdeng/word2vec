@@ -24,7 +24,7 @@
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
 
-const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
+const int VOCAB_HASH_SIZE = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
 typedef float real;                    // Precision of float numbers
 
@@ -149,7 +149,7 @@ void ReadWord(char *word, FILE *fin) {
 int GetWordHash(char *word) {
   unsigned long long a, hash = 0;
   for (a = 0; a < strlen(word); a++) hash = hash * 257 + word[a];
-  hash = hash % vocab_hash_size;
+  hash = hash % VOCAB_HASH_SIZE;
   return hash;
 }
 
@@ -159,7 +159,7 @@ int SearchVocab(char *word) {
   while (1) {
     if (vocab_hash[hash] == -1) return -1;
     if (!strcmp(word, vocab[vocab_hash[hash]].word)) return vocab_hash[hash];
-    hash = (hash + 1) % vocab_hash_size;
+    hash = (hash + 1) % VOCAB_HASH_SIZE;
   }
   return -1;
 }
@@ -186,7 +186,7 @@ int AddWordToVocab(char *word) {
     vocab = (struct vocab_word *)realloc(vocab, vocab_max_size * sizeof(struct vocab_word));
   }
   hash = GetWordHash(word);
-  while (vocab_hash[hash] != -1) hash = (hash + 1) % vocab_hash_size;
+  while (vocab_hash[hash] != -1) hash = (hash + 1) % VOCAB_HASH_SIZE;
   vocab_hash[hash] = vocab_size - 1;
   return vocab_size - 1;
 }
@@ -202,7 +202,7 @@ void SortVocab() {
   unsigned int hash;
   // Sort the vocabulary and keep </s> at the first position
   qsort(&vocab[1], vocab_size - 1, sizeof(struct vocab_word), VocabCompare);
-  for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;
+  for (a = 0; a < VOCAB_HASH_SIZE; a++) vocab_hash[a] = -1;
   size = vocab_size;
   train_words = 0;
   for (a = 0; a < size; a++) {
@@ -213,7 +213,7 @@ void SortVocab() {
     } else {
       // Hash will be re-computed, as after the sorting it is not actual
       hash=GetWordHash(vocab[a].word);
-      while (vocab_hash[hash] != -1) hash = (hash + 1) % vocab_hash_size;
+      while (vocab_hash[hash] != -1) hash = (hash + 1) % VOCAB_HASH_SIZE;
       vocab_hash[hash] = a;
       train_words += vocab[a].cn;
     }
@@ -236,11 +236,11 @@ void ReduceVocab() {
     b++;
   } else free(vocab[a].word);
   vocab_size = b;
-  for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;
+  for (a = 0; a < VOCAB_HASH_SIZE; a++) vocab_hash[a] = -1;
   for (a = 0; a < vocab_size; a++) {
     // Hash will be re-computed, as it is not actual
     hash = GetWordHash(vocab[a].word);
-    while (vocab_hash[hash] != -1) hash = (hash + 1) % vocab_hash_size;
+    while (vocab_hash[hash] != -1) hash = (hash + 1) % VOCAB_HASH_SIZE;
     vocab_hash[hash] = a;
   }
   fflush(stdout);
@@ -318,7 +318,7 @@ void LearnVocabFromTrainFile(const char train_file[]) {
   char word[MAX_STRING];
   FILE *fin;
   long long a, i;
-  for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;
+  for (a = 0; a < VOCAB_HASH_SIZE; a++) vocab_hash[a] = -1;
   fin = fopen(train_file, "rb");
   if (fin == NULL) {
     printf("ERROR: training data file not found!\n");
@@ -339,7 +339,7 @@ void LearnVocabFromTrainFile(const char train_file[]) {
       a = AddWordToVocab(word);
       vocab[a].cn = 1;
     } else vocab[i].cn++;
-    if (vocab_size > vocab_hash_size * 0.7) ReduceVocab();
+    if (vocab_size > VOCAB_HASH_SIZE * 0.7) ReduceVocab();
   }
   SortVocab();
   if (debug_mode > 0) {
@@ -366,7 +366,7 @@ void ReadVocab(const char train_file[]) {
     printf("Vocabulary file not found\n");
     exit(1);
   }
-  for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;
+  for (a = 0; a < VOCAB_HASH_SIZE; a++) vocab_hash[a] = -1;
   vocab_size = 0;
   while (1) {
     ReadWord(word, fin);
@@ -603,7 +603,7 @@ void train_model(const char train_file[], const char output_file[]) {
   long a, b, c, d;
   FILE *fo;
   pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
-  printf("Starting training using file %s\n", train_file);
+  fprintf(stderr, "Starting training using file %s\n", train_file);
   starting_alpha = alpha;
 
   if (read_vocab_file[0] != 0)
@@ -704,35 +704,77 @@ int main(int argc, char **argv) {
   train_file[0] = 0;
   output_file[0] = 0;
 
-  const char *opt = NULL;
-  for (int i = 0; i < argc; ++i) {
-    
+  int i;
+  for (i = 1; i < (argc - 1); ++i) {
+    if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help")) {
+      usage(0);
+    } else if (strcmp(argv[i], "-size") == 0) {
+      layer1_size = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-train") == 0) {
+      strcpy(train_file, argv[++i]);
+    } else if (strcmp(argv[i], "-save-vocab") == 0) {
+      strcpy(save_vocab_file, argv[++i]);
+    } else if (strcmp(argv[i], "-save-vocab") == 0) {
+      strcpy(save_vocab_file, argv[++i]);
+    } else if (strcmp(argv[i], "-read-vocab") == 0) {
+      strcpy(read_vocab_file, argv[++i]);
+    } else if (strcmp(argv[i], "-debug") == 0) {
+      debug_mode = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-binary") == 0) {
+      binary = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-cbow") == 0) {
+      cbow = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-cbow") == 0) {
+      if ((cbow = atoi(argv[++i])))
+        alpha = 0.05;
+    } else if (strcmp(argv[i], "-alpha") == 0) {
+      alpha = atof(argv[++i]);
+    } else if (strcmp(argv[i], "-output") == 0) {
+      strcpy(output_file, argv[++i]);
+    } else if (strcmp(argv[i], "-window") == 0) {
+      window = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-sample") == 0) {
+      sample = atof(argv[++i]);
+    } else if (strcmp(argv[i], "-hs") == 0) {
+      hs = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-negative") == 0) {
+      negative = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-threads") == 0) {
+      num_threads = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-iter") == 0) {
+      iter = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-min-count") == 0) {
+      min_count = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "-classes") == 0) {
+      classes = atoi(argv[++i]);
+    } else if (strcmp(argv[i], "--") == 0) {
+      ++i;
+      break;
+    } else {
+      fprintf(stderr, "Unrecognized option: '%s'\n", argv[i]);
+      usage(1);
+    }
   }
-  if ((i = ArgPos((char *)"-size", argc, argv)) > 0) layer1_size = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-train", argc, argv)) > 0) strcpy(train_file, argv[i + 1]);
-  if ((i = ArgPos((char *)"-save-vocab", argc, argv)) > 0) strcpy(save_vocab_file, argv[i + 1]);
-  if ((i = ArgPos((char *)"-read-vocab", argc, argv)) > 0) strcpy(read_vocab_file, argv[i + 1]);
-  if ((i = ArgPos((char *)"-debug", argc, argv)) > 0) debug_mode = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-binary", argc, argv)) > 0) binary = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-cbow", argc, argv)) > 0) cbow = atoi(argv[i + 1]);
-  if (cbow) alpha = 0.05;
-  if ((i = ArgPos((char *)"-alpha", argc, argv)) > 0) alpha = atof(argv[i + 1]);
-  if ((i = ArgPos((char *)"-output", argc, argv)) > 0) strcpy(output_file, argv[i + 1]);
-  if ((i = ArgPos((char *)"-window", argc, argv)) > 0) window = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-sample", argc, argv)) > 0) sample = atof(argv[i + 1]);
-  if ((i = ArgPos((char *)"-hs", argc, argv)) > 0) hs = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-negative", argc, argv)) > 0) negative = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-threads", argc, argv)) > 0) num_threads = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-iter", argc, argv)) > 0) iter = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-min-count", argc, argv)) > 0) min_count = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
-  vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
-  vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
-  expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
+
+  if (i != argc) {
+    i = argc - 1;
+    if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+      usage(0);
+    }
+    fprintf(stderr,
+            "Missing argument for option: '%s'."
+            "  Type --help to see usage.\n", argv[i]);
+    exit(2);
+  }
+
+  vocab_hash = (int *) calloc(VOCAB_HASH_SIZE, sizeof(int));
+  expTable = (real *) malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
+
   for (i = 0; i < EXP_TABLE_SIZE; i++) {
     expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
     expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
   }
+
   train_model(train_file, output_file);
   return 0;
 }
