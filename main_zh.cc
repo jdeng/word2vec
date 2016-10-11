@@ -72,7 +72,10 @@ std::vector<SentenceP> load_sentences(const std::string& path, bool with_marker,
 					if (sentence->tokens_.empty()) continue;
 					if (with_tag) close_tag(sentence);
 
-					if (ch == u'，' || ch == u'、') continue;
+					char16_t ex1 = u'\xFF0C';// u'，';
+					char16_t ex2 = u'\x3001';// u'、';
+
+					if (ch == ex1 || ch == ex2) continue;
 					if (with_marker) sentence->tokens_.push_back(MARKER);
 					sentence->words_.reserve(sentence->tokens_.size());
 					sentences.push_back(std::move(sentence));
