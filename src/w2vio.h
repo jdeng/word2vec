@@ -30,10 +30,14 @@ void ReadWord(char *word, FILE *fin);
  *
  * @param fin - input stream
  * @type FILE *
+ * @param a_vocab - vocabulary to search in
+ * @type vw_t *
+ * @param a_vocab_hash - hash of word indices
+ * @type int *
  *
  * @return \c void
  */
-int ReadWordIndex(FILE *fin);
+int ReadWordIndex(FILE *fin, const vw_t *a_vocab, const int *a_vocab_hash);
 
 /**
  * Create vocabulary for words in the training file.

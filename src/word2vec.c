@@ -28,7 +28,6 @@ real *syn0, *syn1, *syn1neg, *expTable;
 clock_t start;
 
 const int table_size = 1e8;
-int *table;
 
 /////////////
 // Methods //

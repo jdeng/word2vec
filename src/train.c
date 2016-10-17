@@ -27,15 +27,14 @@ typedef struct {
   const opt_t *m_w2v_opts;
   const vocab_t *m_vocab;
   nnet_t *m_nnet;
-  const real *m_exp_table;
-  const real *m_ugram_table;
+  real *m_exp_table;
+  int *m_ugram_table;
   int m_thread_id;
 } thread_opts_t;
 
 ///////////////
 // Constants //
 ///////////////
-const int TABLE_SIZE = 1e8;
 
 /////////////
 // Methods //
@@ -116,11 +115,12 @@ static void InitNet(nnet_t *a_nnet, vocab_t *a_vocab, const opt_t *a_opts) {
 void *TrainModelThread(void *a_opts) {
   thread_opts_t *thread_opts = (thread_opts_t *) a_opts;
   long long file_size = thread_opts->m_file_size;
-  const vw_t *vocab = thread_opts->m_vocab->m_vocab;
   nnet_t *nnet = thread_opts->m_nnet;
   const real *exp_table = thread_opts->m_exp_table;
+  const int *table = thread_opts->m_ugram_table;
+  const vw_t *vocab = thread_opts->m_vocab->m_vocab;
+  const int *vocab_hash = thread_opts->m_vocab->m_vocab_hash;
   long long vocab_size = thread_opts->m_vocab->m_vocab_size;
-  const real *table = thread_opts->m_ugram_table;
 
   const opt_t *w2v_opts = thread_opts->m_w2v_opts;
   long long layer1_size = w2v_opts->m_layer1_size;
@@ -164,7 +164,7 @@ void *TrainModelThread(void *a_opts) {
 
     if (sentence_length == 0) {
       while (1) {
-        word = ReadWordIndex(fi);
+        word = ReadWordIndex(fi, vocab, vocab_hash);
         if (feof(fi))
           break;
 
@@ -373,9 +373,9 @@ void train_model(const opt_t *a_opts) {
   nnet_t nnet;
   InitNet(&nnet, &vocab, a_opts);
 
-  real *ugram_table = NULL;
+  int *ugram_table = NULL;
   if (a_opts->m_negative > 0)
-    ugram_table = InitUnigramTable();
+    ugram_table = InitUnigramTable(&vocab);
 
   thread_opts_t thread_opts = {clock(), 0,
                                a_opts->m_alpha, a_opts->m_alpha,
