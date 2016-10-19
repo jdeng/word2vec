@@ -5,6 +5,7 @@
 
 #include <math.h>   /* pow() */
 #include <string.h> /* strcmp() */
+#include <stdio.h>  /* fprintf() */
 
 ///////////////
 // Constants //
@@ -13,11 +14,7 @@ const int TABLE_SIZE = 1e8;
 const int MAX_CODE_LENGTH = 40;
 const int MAX_SENTENCE_LENGTH = 1000;
 const int VOCAB_HASH_SIZE = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
-
-///////////////
-// Variables //
-///////////////
-static long long vocab_max_size = 1000, vocab_size = 0;
+const char EOS[] = "</s>";
 
 /////////////
 // Methods //
@@ -25,17 +22,19 @@ static long long vocab_max_size = 1000, vocab_size = 0;
 int *InitUnigramTable(vocab_t *a_vocab) {
   vw_t *vocab = a_vocab->m_vocab;
   long long vocab_size = a_vocab->m_vocab_size;
+  if (vocab_size == 0)
+    return NULL;
 
   long long train_words_pow = 0;
   real d1, power = 0.75;
   int *table = (int *) malloc(TABLE_SIZE * sizeof(int));
-  int a;
+  long long a;
   for (a = 0; a < vocab_size; a++)
     train_words_pow += pow(vocab[a].cn, power);
 
   int i = 0;
   d1 = pow(vocab[i].cn, power) / (real) train_words_pow;
-  for (a = 0; a < TABLE_SIZE; a++) {
+  for (a = 0; a < TABLE_SIZE; ++a) {
     table[a] = i;
     if (a / (real) TABLE_SIZE > d1) {
       ++i;
@@ -49,7 +48,7 @@ int *InitUnigramTable(vocab_t *a_vocab) {
 
 // Create binary Huffman tree using the word counts
 // Frequent words will have short uniqe binary codes
-void CreateBinaryTree(vocab_t *a_vocab) {
+void create_binary_tree(vocab_t *a_vocab) {
   char code[MAX_CODE_LENGTH];
   long long a, b, i, min1i, min2i, pos1, pos2, point[MAX_CODE_LENGTH];
 
@@ -100,7 +99,7 @@ void CreateBinaryTree(vocab_t *a_vocab) {
     binary[min2i] = 1;
   }
   // Now assign binary code to each vocabulary word
-  for (a = 0; a < vocab_size; a++) {
+  for (a = 0; a < vocab_size; ++a) {
     b = a;
     i = 0;
     while (1) {
@@ -124,15 +123,15 @@ void CreateBinaryTree(vocab_t *a_vocab) {
 }
 
 // Returns hash value of a word
-static int GetWordHash(char *word) {
+static int GetWordHash(const char *word) {
   unsigned long long a, hash = 0;
-  for (a = 0; a < strlen(word); a++)
+  for (a = 0; a < strlen(word); ++a)
     hash = hash * 257 + word[a];
 
   return hash % VOCAB_HASH_SIZE;
 }
 
-int SearchVocab(char *a_word, const vw_t *a_vocab, const int *a_vocab_hash) {
+int SearchVocab(const char *a_word, const vw_t *a_vocab, const int *a_vocab_hash) {
   unsigned int hash = GetWordHash(a_word);
   while (1) {
     if (a_vocab_hash[hash] == -1)
@@ -147,23 +146,40 @@ int SearchVocab(char *a_word, const vw_t *a_vocab, const int *a_vocab_hash) {
 }
 
 // Adds a word to the vocabulary
-int AddWordToVocab(vocab_t *a_vocab, char *a_word) {
+int AddWordToVocab(vocab_t *a_vocab, const char *a_word) {
+  long long vocab_size = a_vocab->m_vocab_size;
   int *vocab_hash = a_vocab->m_vocab_hash;
   vw_t *vocab = a_vocab->m_vocab;
 
-  unsigned int hash, length = strlen(a_word) + 1;
-  if (length > MAX_STRING) length = MAX_STRING;
-  vocab[vocab_size].word = (char *)calloc(length, sizeof(char));
-  strcpy(vocab[vocab_size].word, a_word);
-  vocab[vocab_size].cn = 0;
-  vocab_size++;
-  // Reallocate memory if needed
-  if (vocab_size + 2 >= vocab_max_size) {
-    vocab_max_size += 1000;
-    vocab = (struct vocab_word *)realloc(vocab, vocab_max_size * sizeof(struct vocab_word));
+
+  /* check if the word is already known */
+  int i;
+  if ((i = SearchVocab(a_word, vocab, vocab_hash)) >= 0) {
+    ++vocab[i].cn;
+    return vocab_size;
   }
+  /* truncate word to the maximum acceptable length */
+  unsigned int hash, length = strlen(a_word) + 1;
+  if (length > MAX_STRING)
+    length = MAX_STRING;
+
+  /* Reallocate memory if needed */
+  if (vocab_size + 2 >= a_vocab->m_max_vocab_size) {
+    a_vocab->m_max_vocab_size += 1000;
+    a_vocab->m_vocab = (vw_t *) realloc(a_vocab->m_vocab,
+                                        a_vocab->m_max_vocab_size * sizeof(vw_t));
+    vocab = a_vocab->m_vocab;
+  }
+
+  vocab[vocab_size].word = (char *) calloc(length, sizeof(char));
+  strcpy(vocab[vocab_size].word, a_word);
+  vocab[vocab_size].cn = 1;
+  vocab_size = ++a_vocab->m_vocab_size;
+
   hash = GetWordHash(a_word);
-  while (vocab_hash[hash] != -1) hash = (hash + 1) % VOCAB_HASH_SIZE;
+  while (vocab_hash[hash] != -1)
+    hash = (hash + 1) % VOCAB_HASH_SIZE;
+
   vocab_hash[hash] = vocab_size - 1;
   return vocab_size - 1;
 }
@@ -193,7 +209,7 @@ int sort_vocab(vocab_t *a_vocab, const int a_min_count) {
   for (a = 0; a < size; a++) {
     // Words occuring less than min_count times will be discarded from the vocab
     if ((vocab[a].cn < a_min_count) && (a != 0)) {
-      --vocab_size;
+      vocab_size = --a_vocab->m_vocab_size;
       free(vocab[a].word);
     } else {
       // Hash will be re-computed, as after the sorting it is not actual
@@ -216,7 +232,7 @@ int sort_vocab(vocab_t *a_vocab, const int a_min_count) {
 }
 
 // Reduces the vocabulary by removing infrequent tokens
-void ReduceVocab(vocab_t *a_vocab, opt_t *a_opts) {
+void reduce_vocab(vocab_t *a_vocab, opt_t *a_opts) {
   long long vocab_size = a_vocab->m_vocab_size;
   vw_t *vocab = a_vocab->m_vocab;
   int *vocab_hash = a_vocab->m_vocab_hash;
@@ -249,13 +265,15 @@ void ReduceVocab(vocab_t *a_vocab, opt_t *a_opts) {
 }
 
 void init_vocab(vocab_t *a_vocab) {
-  a_vocab->m_vocab_size = 0;
+  a_vocab->m_vocab_size = 0; /**< number of actually stored elements */
+  a_vocab->m_max_vocab_size = 0;  /**< pre-allocated  */
   a_vocab->m_vocab = NULL;
   a_vocab->m_vocab_hash = (int *) calloc(VOCAB_HASH_SIZE, sizeof(int));
 }
 
 void free_vocab(vocab_t *a_vocab) {
-  a_vocab->m_vocab_size = 0;
   free(a_vocab->m_vocab);
   free(a_vocab->m_vocab_hash);
+  a_vocab->m_max_vocab_size = 0;
+  a_vocab->m_vocab_size = 0;
 }

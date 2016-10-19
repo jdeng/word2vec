@@ -20,15 +20,6 @@
 #include <string.h>
 
 
-char EOS[] = "</s>";
-
-struct vocab_word *vocab;
-long long iter = 5, file_size = 0;
-real *syn0, *syn1, *syn1neg, *expTable;
-clock_t start;
-
-const int table_size = 1e8;
-
 /////////////
 // Methods //
 /////////////
@@ -53,8 +44,8 @@ static void usage(int a_ret) {
   printf("-window <int>\n");
   printf("\tSet max skip length between words; default is 5\n");
   printf("-sample <float>\n");
-  printf("\tSet threshold for occurrence of words. Those that appear with higher frequency in the training data\n");
-  printf("\twill be randomly down-sampled; default is 1e-3, useful range is (0, 1e-5)\n");
+  printf("\tSet threshold for occurrence of words. Those that appear with higher frequency in the\n");
+  printf("\ttraining data will be randomly down-sampled; default is 1e-3, useful range is (0, 1e-5)\n");
   printf("-hs <int>\n");
   printf("\tUse Hierarchical Softmax; default is 0 (not used)\n");
   printf("-negative <int>\n");
@@ -74,13 +65,13 @@ static void usage(int a_ret) {
   printf("-cbow <int>\n");
   printf("\tUse the continuous bag of words model; default is 1 (use 0 for skip-gram model)\n");
   printf("-multitask <int>\n");
-  printf("\tTrain multi-task embeddings (argument should specify the number of additional tasks");
+  printf("\tTrain multi-task embeddings (argument should specify the number of additional tasks\n");
   printf("-task-specific <int>\n");
-  printf("\tTrain task-specific embeddings; argument should specify the number of classes;");
-  printf("\t(last field on each line of the input file should contain the numeric label");
+  printf("\tTrain task-specific embeddings; argument should specify the number of classes;\n");
+  printf("\t(last field on each line of the input file should contain a numeric label `< int'\n");
   printf("\tor `_' if the label is unknown and the instance should be skipped)\n");
   printf("-least-sq <int>\n");
-  printf("\tMap generic word2vec to task-specific embeddings using least squares\n");
+  printf("\tMap generic word2vec vectors to task-specific embeddings using least squares\n");
   printf("\nExamples:\n");
   printf("./word2vec -train data.txt -output vec.txt -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3\n\n");
   exit(a_ret);

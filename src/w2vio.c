@@ -4,6 +4,7 @@
 #include "common.h"
 #include "w2vio.h"
 
+#include <ctype.h>  /* isspace() */
 #include <string.h>
 
 /////////////
@@ -44,27 +45,45 @@ int ReadWordIndex(FILE *fin,
   return SearchVocab(word, a_vocab, a_vocab_hash);
 }
 
-/* static void process_line_w2v(, const opt_t *a_opts) { */
-/*   ++(*train_words); */
+static int process_line_multitask(vocab_t *a_vocab, char *a_word,
+                                  const char *a_line, ssize_t a_read) {
+  int n_words = 0;
+  return n_words;
+}
 
-/*   if ((a_opts->m_debug_mode > 1) && ((*train_words) % 100000 == 0)) { */
-/*     fprintf(stderr, "%lldK%c", train_words / 1000, 13); */
-/*     fflush(stderr); */
-/*   } */
+static int process_line_task_specific(vocab_t *a_vocab, char *a_word,
+                                      const char *a_line, ssize_t a_read) {
+  int n_words = 0;
+  return n_words;
+}
 
-/*   i = SearchVocab(word); */
-/*   if (i == -1) { */
-/*     a = AddWordToVocab(word); */
-/*     vocab[a].cn = 1; */
-/*   } else { */
-/*     ++vocab[i].cn; */
-/*   } */
+static int process_line_w2v(vocab_t *a_vocab, char *a_word,
+                            const char *a_line, ssize_t a_read) {
+  int n_words = 0;
 
-/*   if (vocab_size > VOCAB_HASH_SIZE * 0.7) */
-/*     ReduceVocab(); */
-/* } */
+  ssize_t i, n_chars;
+  for (i = 0, n_chars = 0; i < a_read; ++i, ++n_chars) {
+    if (isspace(a_line[i])) {
+      if (n_chars > 0) {
+        a_word[n_chars] = 0;
+        AddWordToVocab(a_vocab, a_word);
+      }
+      n_chars = -1;
+    } else if (n_chars >= MAX_STRING) {
+      n_chars = MAX_STRING - 1;
+      a_word[n_chars] = 0;
+    } else {
+      a_word[n_chars] = a_line[i];
+    }
+  }
 
-void learn_vocab_from_trainfile(vocab_t *a_vocab, const opt_t *a_opts) {
+  if (n_chars > 0)
+    AddWordToVocab(a_vocab, a_word);
+
+  return n_words;
+}
+
+size_t learn_vocab_from_trainfile(vocab_t *a_vocab, opt_t *a_opts) {
   FILE *fin = fopen(a_opts->m_train_file, "rb");
   if (fin == NULL) {
     fprintf(stderr, "ERROR: training data file not found!\n");
@@ -76,39 +95,45 @@ void learn_vocab_from_trainfile(vocab_t *a_vocab, const opt_t *a_opts) {
     a_vocab->m_vocab_hash[a] = -1;
   }
 
-  /* size_t len = 0; */
-  /* ssize_t read; */
-  /* char *line = NULL; */
-  /* char word[MAX_STRING]; */
-  /* long long vocab_size = 0, train_words = 0; */
-  /* void (*process_line)(const char *, ssize_t, int *) = NULL; */
+  ssize_t read;
+  char *line = NULL;
+  size_t len = 0;
+  char word[MAX_STRING];
+  int (*process_line)(vocab_t *a_vocab, char *a_word,
+                      const char *a_line, ssize_t a_read) = NULL;
 
-  /* if (a_opts->m_multitask) */
-  /*   process_line = process_line_multitask; */
-  /* else if (a_opts->m_task_specific) */
-  /*   process_line = process_line_task_specific; */
-  /* else */
-  /*   process_line = process_line_w2v; */
+  if (a_opts->m_multitask)
+    process_line = process_line_multitask;
+  else if (a_opts->m_task_specific)
+    process_line = process_line_task_specific;
+  else
+    process_line = process_line_w2v;
 
-  /* while ((read = getline(&line, &len, fin)) != -1) { */
-  /*   if ((a_opts->m_debug_mode > 1) && (train_words % 100000 == 0)) { */
-  /*     fprintf(stderr, "%lldK%c", train_words / 1000, 13); */
-  /*     fflush(stderr); */
-  /*   } */
-  /*   process_line(line, read); */
-  /* } */
-  /* free(line); */
+  AddWordToVocab(a_vocab, EOS);
+  long long train_words = 1;
+  while ((read = getline(&line, &len, fin)) != -1) {
+    if ((a_opts->m_debug_mode > 1) && (train_words % 100000 == 0)) {
+      fprintf(stderr, "%lldK%c", train_words / 1000, 13);
+      fflush(stderr);
+    }
+    train_words += process_line(a_vocab, word, line, read);
 
-  /* if (ferror(fin)) { */
-  /*   fprintf(stderr, "ERROR: reading input file\n"); */
-  /*   exit(EXIT_FAILURE); */
-  /* } */
-  /* sort_vocab(a_vocab, a_opts->m_min_count); */
-  /* if (a_opts->m_debug_mode > 0) { */
-  /*   fprintf(stderr, "Vocab size: %lld\n", vocab_size); */
-  /*   fprintf(stderr, "Words in train file: %lld\n", train_words); */
-  /* } */
-  /* long long file_size = ftell(fin); */
-  /* fclose(fin); */
-  /* return file_size; */
+    if (a_vocab->m_vocab_size > VOCAB_HASH_SIZE * 0.7)
+      reduce_vocab(a_vocab, a_opts);
+  }
+  free(line);
+  sort_vocab(a_vocab, a_opts->m_min_count);
+  create_binary_tree(a_vocab);
+
+  if (ferror(fin)) {
+    fprintf(stderr, "ERROR: reading input file\n");
+    exit(EXIT_FAILURE);
+  }
+  if (a_opts->m_debug_mode > 0) {
+    fprintf(stderr, "Vocab size: %lld\n", a_vocab->m_vocab_size);
+    fprintf(stderr, "Words in train file: %lld\n", train_words);
+  }
+  size_t file_size = ftell(fin);
+  fclose(fin);
+  return file_size;
 }

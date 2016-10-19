@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <pthread.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -21,7 +22,7 @@ typedef struct {
 
 typedef struct {
   clock_t m_start;
-  long long m_file_size;
+  size_t m_file_size;
   real m_alpha;
   real m_starting_alpha;
   const opt_t *m_w2v_opts;
@@ -69,6 +70,7 @@ static void InitNet(nnet_t *a_nnet, vocab_t *a_vocab, const opt_t *a_opts) {
   long long layer1_size = a_opts->m_layer1_size;
 
   reset_nnet(a_nnet);
+  fprintf(stderr, "nnet reset\n");
 
   a = posix_memalign((void **) &a_nnet->m_syn0, 128,
                      (long long) vocab_size
@@ -103,13 +105,13 @@ static void InitNet(nnet_t *a_nnet, vocab_t *a_vocab, const opt_t *a_opts) {
         a_nnet->m_syn1neg[a * layer1_size + b] = 0;
   }
 
-  for (a = 0; a < vocab_size; a++)
+  for (a = 0; a < vocab_size; a++) {
     for (b = 0; b < layer1_size; b++) {
       next_random = next_random * (unsigned long long)25214903917 + 11;
       a_nnet->m_syn0[a * layer1_size + b] = (((next_random & 0xFFFF)
-                                    / (real)65536) - 0.5) / layer1_size;
+                                              / (real)65536) - 0.5) / layer1_size;
     }
-  CreateBinaryTree(a_vocab);
+  }
 }
 
 void *TrainModelThread(void *a_opts) {
@@ -360,28 +362,32 @@ void *TrainModelThread(void *a_opts) {
   pthread_exit(NULL);
 }
 
-void train_model(const opt_t *a_opts) {
+void train_model(opt_t *a_opts) {
   fprintf(stderr, "Starting training using file %s\n",
           a_opts->m_train_file);
 
   /* initialize vocabulary and exp table */
   vocab_t vocab;
   init_vocab(&vocab);
-  learn_vocab_from_trainfile(&vocab, a_opts);
+  fprintf(stderr, "learning vocabulary\n");
+  size_t file_size = learn_vocab_from_trainfile(&vocab, a_opts);
+  fprintf(stderr, "vocabulary learned: %lld entries\n", vocab.m_vocab_size);
   real *exp_table = init_exp_table();
 
   nnet_t nnet;
   InitNet(&nnet, &vocab, a_opts);
+  fprintf(stderr, "nnet initialized\n");
 
   int *ugram_table = NULL;
   if (a_opts->m_negative > 0)
     ugram_table = InitUnigramTable(&vocab);
 
-  thread_opts_t thread_opts = {clock(), 0,
+  fprintf(stderr, "unigram table initialized\n");
+  thread_opts_t thread_opts = {clock(), file_size,
                                a_opts->m_alpha, a_opts->m_alpha,
                                a_opts, &vocab, &nnet,
                                exp_table, ugram_table, 0};
-
+  fprintf(stderr, "thread_opts initialized\n");
   /* start = clock(); */
   /* pthread_t *pt = (pthread_t *) malloc(num_threads * sizeof(pthread_t)); */
   /* for (a = 0; a < num_threads; ++a) { */

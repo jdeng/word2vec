@@ -29,5 +29,5 @@
  *
  * @return \c void
  */
-void train_model(const opt_t *a_opts);
+void train_model(opt_t *a_opts);
 #endif  /* ifndef __WORD2VEC_TRAIN_H__ */

@@ -40,14 +40,14 @@ void ReadWord(char *word, FILE *fin);
 int ReadWordIndex(FILE *fin, const vw_t *a_vocab, const int *a_vocab_hash);
 
 /**
- * Create vocabulary for words in the training file.
+ * Create vocabulary from words in the training file.
  *
  * @param a_vocab - vocabulary to populate
  * @type vocab_t *
  * @param a_opts - word to search for
- * @type const opt_t *
+ * @type opt_t *
  *
- * @return \c void
+ * @return \c size_t - size of the input file
  */
-void learn_vocab_from_trainfile(vocab_t *a_vocab, const opt_t *a_opts);
+size_t learn_vocab_from_trainfile(vocab_t *a_vocab, opt_t *a_opts);
 #endif  /* ifndef __WORD2VEC_IO_H__ */

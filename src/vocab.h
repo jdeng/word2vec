@@ -20,6 +20,7 @@ extern const int TABLE_SIZE;
 extern const int MAX_CODE_LENGTH;
 extern const int MAX_SENTENCE_LENGTH;
 extern const int VOCAB_HASH_SIZE;  // Maximum 30 * 0.7 = 21M words in the vocabulary
+extern const char EOS[];
 
 /////////////
 // Structs //
@@ -32,6 +33,7 @@ typedef struct vocab_word {
 
 typedef struct vocab {
   long long m_vocab_size;
+  long long m_max_vocab_size;
   vw_t *m_vocab;
   int *m_vocab_hash;
 } vocab_t;
@@ -60,7 +62,7 @@ int *InitUnigramTable(vocab_t *a_vocab);
  *
  * @return \c int - position of a word in the vocabulary
  */
-int AddWordToVocab(vocab_t *a_vocab, char *a_word);
+int AddWordToVocab(vocab_t *a_vocab, const char *a_word);
 
 /**
  * Look up a word in the vocabulary.
@@ -75,17 +77,17 @@ int AddWordToVocab(vocab_t *a_vocab, char *a_word);
  * @return \c int - position of a word in the vocabulary or -1 if the
  *   word is not found
  */
-int SearchVocab(char *a_word, const vw_t *a_vocab, const int *a_vocab_hash);
+int SearchVocab(const char *a_word, const vw_t *a_vocab, const int *a_vocab_hash);
 
 /**
- * Create binary search tree for vocabulary.
+ * Create binary search tree for the vocabulary.
  *
- * @param a_vocab - vocabulary innstance
+ * @param a_vocab - vocabulary instance
  * @type vocab_t *
  *
  * @return \c void
  */
-void CreateBinaryTree(vocab_t *a_vocab);
+void create_binary_tree(vocab_t *a_vocab);
 
 /**
  * Initialize vocabulary to an empty dictionary.
@@ -96,6 +98,16 @@ void CreateBinaryTree(vocab_t *a_vocab);
  * @return \c void
  */
 void init_vocab(vocab_t *a_vocab);
+
+/**
+ * Free memory occupied by vocabulary.
+ *
+ * @param a_vocab - vocabulary innstance
+ * @type vocab_t *
+ *
+ * @return \c void
+ */
+void free_vocab(vocab_t *a_vocab);
 
 /**
  * Sort vocabulary.
@@ -110,13 +122,15 @@ void init_vocab(vocab_t *a_vocab);
 int sort_vocab(vocab_t *a_vocab, const int a_min_count);
 
 /**
- * Free memory occupied by vocabulary.
+ * Reduce vocabulary by removing infrequent tokens.
  *
  * @param a_vocab - vocabulary innstance
  * @type vocab_t *
+ * @param a_opts - CLI options defining reduce behavior
+ * @type opt_t *
  *
  * @return \c void
  */
-void free_vocab(vocab_t *a_vocab);
+void reduce_vocab(vocab_t *a_vocab, opt_t *a_opts);
 
 #endif  /* ifndef __WORD2VEC_VOCAB_H__ */
