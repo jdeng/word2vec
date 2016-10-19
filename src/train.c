@@ -114,7 +114,7 @@ static void init_net(nnet_t *a_nnet, vocab_t *a_vocab, const opt_t *a_opts) {
   }
 }
 
-void *TrainModelThread(void *a_opts) {
+static void *train_model_thread(void *a_opts) {
   thread_opts_t *thread_opts = (thread_opts_t *) a_opts;
   long long file_size = thread_opts->m_file_size;
   nnet_t *nnet = thread_opts->m_nnet;
@@ -362,6 +362,33 @@ void *TrainModelThread(void *a_opts) {
   pthread_exit(NULL);
 }
 
+static void save_embeddings(const opt_t *a_opts, const vocab_t *a_vocab,
+                            const nnet_t *a_nnet) {
+  FILE *fo = a_opts->m_output_file[0]? \
+             fopen(a_opts->m_output_file, "wb"): stdout;
+
+  long long vocab_size = a_vocab->m_vocab_size;
+  const vw_t *vocab = a_vocab->m_vocab;
+
+  // Save the word vectors
+  fprintf(fo, "%lld %lld\n", vocab_size, a_opts->m_layer1_size);
+  long a, b;
+  for (a = 0; a < vocab_size; ++a) {
+    fprintf(fo, "%s ", vocab[a].word);
+    if (a_opts->m_binary)
+      for (b = 0; b < a_opts->m_layer1_size; ++b)
+        fwrite(&a_nnet->m_syn0[a * a_opts->m_layer1_size + b], sizeof(real), 1, fo);
+    else
+      for (b = 0; b < a_opts->m_layer1_size; ++b)
+        fprintf(fo, "%lf ", a_nnet->m_syn0[a * a_opts->m_layer1_size + b]);
+
+    fprintf(fo, "\n");
+  }
+
+  if (a_opts->m_output_file[0])
+    fclose(fo);
+}
+
 void train_model(opt_t *a_opts) {
   fprintf(stderr, "Starting training using file '%s'\n",
           a_opts->m_train_file);
@@ -383,32 +410,19 @@ void train_model(opt_t *a_opts) {
                                a_opts->m_alpha, a_opts->m_alpha,
                                a_opts, &vocab, &nnet,
                                exp_table, ugram_table, 0};
-  fprintf(stderr, "thread_opts initialized\n");
-  /* start = clock(); */
-  /* pthread_t *pt = (pthread_t *) malloc(num_threads * sizeof(pthread_t)); */
-  /* for (a = 0; a < num_threads; ++a) { */
-  /*   opts.m_id = a; */
-  /*   pthread_create(&pt[a], NULL, TrainModelThread, (void *) a_opts); */
-  /* } */
-  /* for (a = 0; a < num_threads; a++) */
-  /*   pthread_join(pt[a], NULL); */
 
-  /* FILE *fo = a_opts->output_file[0]? fopen(a_opts->output_file, "wb"): stdout; */
+  pthread_t *pt = (pthread_t *) malloc(a_opts->m_num_threads
+                                       * sizeof(pthread_t));
+  int a;
+  for (a = 0; a < a_opts->m_num_threads; ++a) {
+    thread_opts.m_thread_id = a;
+    pthread_create(&pt[a], NULL, train_model_thread,
+                   (void *) &thread_opts);
+  }
+  for (a = 0; a < a_opts->m_num_threads; a++)
+    pthread_join(pt[a], NULL);
 
-  /* // Save the word vectors */
-  /* fprintf(fo, "%lld %lld\n", vocab_size, a_opts->m_layer1_size); */
-  /* long a, b, c, d; */
-  /* for (a = 0; a < vocab_size; a++) { */
-  /*   fprintf(fo, "%s ", vocab[a].word); */
-  /*   if (a_opts->m_binary) */
-  /*     for (b = 0; b < a_opts->m_layer1_size; b++) */
-  /*       fwrite(&syn0[a * a_opts->m_layer1_size + b], sizeof(real), 1, fo); */
-  /*   else */
-  /*     for (b = 0; b < layer1_size; b++) */
-  /*       fprintf(fo, "%lf ", syn0[a * a_opts->m_layer1_size + b]); */
-
-  /*   fprintf(fo, "\n"); */
-  /* } */
+  save_embeddings(a_opts, &vocab, &nnet);
 
   free_nnet(&nnet);
   free(ugram_table);
