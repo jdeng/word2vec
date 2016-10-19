@@ -42,7 +42,7 @@ int ReadWordIndex(FILE *fin,
   if (feof(fin))
     return -1;
 
-  return SearchVocab(word, a_vocab, a_vocab_hash);
+  return search_vocab(word, a_vocab, a_vocab_hash);
 }
 
 static int process_line_multitask(vocab_t *a_vocab, char *a_word,
@@ -66,7 +66,7 @@ static int process_line_w2v(vocab_t *a_vocab, char *a_word,
     if (isspace(a_line[i])) {
       if (n_chars > 0) {
         a_word[n_chars] = 0;
-        AddWordToVocab(a_vocab, a_word);
+        add_word2vocab(a_vocab, a_word);
       }
       n_chars = -1;
     } else if (n_chars >= MAX_STRING) {
@@ -78,7 +78,7 @@ static int process_line_w2v(vocab_t *a_vocab, char *a_word,
   }
 
   if (n_chars > 0)
-    AddWordToVocab(a_vocab, a_word);
+    add_word2vocab(a_vocab, a_word);
 
   return n_words;
 }
@@ -109,7 +109,7 @@ size_t learn_vocab_from_trainfile(vocab_t *a_vocab, opt_t *a_opts) {
   else
     process_line = process_line_w2v;
 
-  AddWordToVocab(a_vocab, EOS);
+  add_word2vocab(a_vocab, EOS);
   long long train_words = 1;
   while ((read = getline(&line, &len, fin)) != -1) {
     if ((a_opts->m_debug_mode > 1) && (train_words % 100000 == 0)) {

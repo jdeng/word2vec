@@ -50,7 +50,7 @@ typedef struct vocab {
  *
  * @return \c int * - pointer to the initialized table
  */
-int *InitUnigramTable(vocab_t *a_vocab);
+int *init_unigram_table(vocab_t *a_vocab);
 
 /**
  * Add a word to the vocabulary.
@@ -62,7 +62,7 @@ int *InitUnigramTable(vocab_t *a_vocab);
  *
  * @return \c int - position of a word in the vocabulary
  */
-int AddWordToVocab(vocab_t *a_vocab, const char *a_word);
+int add_word2vocab(vocab_t *a_vocab, const char *a_word);
 
 /**
  * Look up a word in the vocabulary.
@@ -77,7 +77,7 @@ int AddWordToVocab(vocab_t *a_vocab, const char *a_word);
  * @return \c int - position of a word in the vocabulary or -1 if the
  *   word is not found
  */
-int SearchVocab(const char *a_word, const vw_t *a_vocab, const int *a_vocab_hash);
+int search_vocab(const char *a_word, const vw_t *a_vocab, const int *a_vocab_hash);
 
 /**
  * Create binary search tree for the vocabulary.

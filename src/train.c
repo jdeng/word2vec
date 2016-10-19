@@ -63,7 +63,7 @@ static real *init_exp_table(void) {
   return exp_table;
 }
 
-static void InitNet(nnet_t *a_nnet, vocab_t *a_vocab, const opt_t *a_opts) {
+static void init_net(nnet_t *a_nnet, vocab_t *a_vocab, const opt_t *a_opts) {
   long long a, b;
   unsigned long long next_random = 1;
   long long vocab_size = a_vocab->m_vocab_size;
@@ -363,26 +363,22 @@ void *TrainModelThread(void *a_opts) {
 }
 
 void train_model(opt_t *a_opts) {
-  fprintf(stderr, "Starting training using file %s\n",
+  fprintf(stderr, "Starting training using file '%s'\n",
           a_opts->m_train_file);
 
   /* initialize vocabulary and exp table */
   vocab_t vocab;
   init_vocab(&vocab);
-  fprintf(stderr, "learning vocabulary\n");
   size_t file_size = learn_vocab_from_trainfile(&vocab, a_opts);
-  fprintf(stderr, "vocabulary learned: %lld entries\n", vocab.m_vocab_size);
   real *exp_table = init_exp_table();
 
   nnet_t nnet;
-  InitNet(&nnet, &vocab, a_opts);
-  fprintf(stderr, "nnet initialized\n");
+  init_net(&nnet, &vocab, a_opts);
 
   int *ugram_table = NULL;
   if (a_opts->m_negative > 0)
-    ugram_table = InitUnigramTable(&vocab);
+    ugram_table = init_unigram_table(&vocab);
 
-  fprintf(stderr, "unigram table initialized\n");
   thread_opts_t thread_opts = {clock(), file_size,
                                a_opts->m_alpha, a_opts->m_alpha,
                                a_opts, &vocab, &nnet,

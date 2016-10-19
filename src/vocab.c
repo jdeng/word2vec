@@ -19,7 +19,7 @@ const char EOS[] = "</s>";
 /////////////
 // Methods //
 /////////////
-int *InitUnigramTable(vocab_t *a_vocab) {
+int *init_unigram_table(vocab_t *a_vocab) {
   vw_t *vocab = a_vocab->m_vocab;
   long long vocab_size = a_vocab->m_vocab_size;
   if (vocab_size == 0)
@@ -131,7 +131,7 @@ static int GetWordHash(const char *word) {
   return hash % VOCAB_HASH_SIZE;
 }
 
-int SearchVocab(const char *a_word, const vw_t *a_vocab, const int *a_vocab_hash) {
+int search_vocab(const char *a_word, const vw_t *a_vocab, const int *a_vocab_hash) {
   unsigned int hash = GetWordHash(a_word);
   while (1) {
     if (a_vocab_hash[hash] == -1)
@@ -146,7 +146,7 @@ int SearchVocab(const char *a_word, const vw_t *a_vocab, const int *a_vocab_hash
 }
 
 // Adds a word to the vocabulary
-int AddWordToVocab(vocab_t *a_vocab, const char *a_word) {
+int add_word2vocab(vocab_t *a_vocab, const char *a_word) {
   long long vocab_size = a_vocab->m_vocab_size;
   int *vocab_hash = a_vocab->m_vocab_hash;
   vw_t *vocab = a_vocab->m_vocab;
@@ -154,7 +154,7 @@ int AddWordToVocab(vocab_t *a_vocab, const char *a_word) {
 
   /* check if the word is already known */
   int i;
-  if ((i = SearchVocab(a_word, vocab, vocab_hash)) >= 0) {
+  if ((i = search_vocab(a_word, vocab, vocab_hash)) >= 0) {
     ++vocab[i].cn;
     return vocab_size;
   }
