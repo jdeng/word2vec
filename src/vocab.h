@@ -34,6 +34,7 @@ typedef struct vocab_word {
 typedef struct vocab {
   long long m_vocab_size;
   long long m_max_vocab_size;
+  long long m_train_words;
   vw_t *m_vocab;
   int *m_vocab_hash;
 } vocab_t;

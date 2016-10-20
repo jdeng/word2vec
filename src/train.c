@@ -25,12 +25,12 @@ typedef struct {
   size_t m_file_size;
   real m_alpha;
   real m_starting_alpha;
+  long m_thread_id;
   const opt_t *m_w2v_opts;
   const vocab_t *m_vocab;
   nnet_t *m_nnet;
   real *m_exp_table;
   int *m_ugram_table;
-  int m_thread_id;
 } thread_opts_t;
 
 ///////////////
@@ -123,6 +123,7 @@ static void *train_model_thread(void *a_opts) {
   const vw_t *vocab = thread_opts->m_vocab->m_vocab;
   const int *vocab_hash = thread_opts->m_vocab->m_vocab_hash;
   long long vocab_size = thread_opts->m_vocab->m_vocab_size;
+  long long train_words = thread_opts->m_vocab->m_train_words;
 
   const opt_t *w2v_opts = thread_opts->m_w2v_opts;
   long long layer1_size = w2v_opts->m_layer1_size;
@@ -131,18 +132,17 @@ static void *train_model_thread(void *a_opts) {
   const int window = w2v_opts->m_window;
 
   long long a, b, d, cw, word, last_word, sentence_length = 0, sentence_position = 0;
-  long long train_words = 0, word_count_actual = 0;
+  long long word_count_actual = 0;
   long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
   long long l1, l2, c, target, label;
   long long local_iter = w2v_opts->m_iter;
-  unsigned long long next_random = thread_opts->m_thread_id;
+  unsigned long long next_random = (long long) thread_opts->m_thread_id;
   real f, g;
   clock_t now;
   real *neu1 = (real *)calloc(layer1_size, sizeof(real));
   real *neu1e = (real *)calloc(layer1_size, sizeof(real));
   FILE *fi = fopen(w2v_opts->m_train_file, "rb");
   fseek(fi, file_size / (long long) num_threads * (long long) next_random, SEEK_SET);
-
   while (1) {
     if (word_count - last_word_count > 10000) {
       word_count_actual += word_count - last_word_count;
@@ -172,7 +172,7 @@ static void *train_model_thread(void *a_opts) {
 
         if (word == -1)
           continue;
-        word_count++;
+        ++word_count;
         if (word == 0) break;
         // The subsampling randomly discards frequent words while keeping the ranking same
         if (sample > 0) {
@@ -183,7 +183,7 @@ static void *train_model_thread(void *a_opts) {
           if (ran < (next_random & 0xFFFF) / (real)65536) continue;
         }
         sen[sentence_length] = word;
-        sentence_length++;
+        ++sentence_length;
         if (sentence_length >= MAX_SENTENCE_LENGTH) break;
       }
       sentence_position = 0;
@@ -216,14 +216,23 @@ static void *train_model_thread(void *a_opts) {
       for (a = b; a < window * 2 + 1 - b; a++)
         if (a != window) {
           c = sentence_position - window + a;
-          if (c < 0) continue;
-          if (c >= sentence_length) continue;
-          last_word = sen[c];
-          if (last_word == -1) continue;
-          for (c = 0; c < layer1_size; c++)
-            neu1[c] += nnet->m_syn0[c + last_word * layer1_size];
+          if (c < 0)
+            continue;
 
-          cw++;
+          if (c >= sentence_length)
+            continue;
+
+          last_word = sen[c];
+          if (last_word == -1)
+            continue;
+
+          for (c = 0; c < layer1_size; c++) {
+            neu1[c] += nnet->m_syn0[c + last_word * layer1_size];
+            /* fprintf(stderr, "neu1[%d] += nnet->m_syn0[%d] (%f)", */
+            /*        c, c + last_word * layer1_size, */
+            /*        nnet->m_syn0[c + last_word * layer1_size]); */
+          }
+          ++cw;
         }
       if (cw) {
         for (c = 0; c < layer1_size; c++)
@@ -397,6 +406,7 @@ void train_model(opt_t *a_opts) {
   vocab_t vocab;
   init_vocab(&vocab);
   size_t file_size = learn_vocab_from_trainfile(&vocab, a_opts);
+
   real *exp_table = init_exp_table();
 
   nnet_t nnet;
@@ -408,12 +418,12 @@ void train_model(opt_t *a_opts) {
 
   thread_opts_t thread_opts = {clock(), file_size,
                                a_opts->m_alpha, a_opts->m_alpha,
-                               a_opts, &vocab, &nnet,
-                               exp_table, ugram_table, 0};
+                               0, a_opts, &vocab, &nnet,
+                               exp_table, ugram_table};
 
   pthread_t *pt = (pthread_t *) malloc(a_opts->m_num_threads
                                        * sizeof(pthread_t));
-  int a;
+  long a;
   for (a = 0; a < a_opts->m_num_threads; ++a) {
     thread_opts.m_thread_id = a;
     pthread_create(&pt[a], NULL, train_model_thread,

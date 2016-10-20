@@ -28,8 +28,9 @@ void ReadWord(char *word, FILE *fin) {
       } else continue;
     }
     word[a] = ch;
-    a++;
-    if (a >= MAX_STRING - 1) a--;   // Truncate too long words
+    ++a;
+    if (a >= MAX_STRING - 1)
+      --a;   // Truncate too long words
   }
   word[a] = 0;
 }
@@ -67,6 +68,7 @@ static int process_line_w2v(vocab_t *a_vocab, char *a_word,
       if (n_chars > 0) {
         a_word[n_chars] = 0;
         add_word2vocab(a_vocab, a_word);
+        ++n_words;
       }
       n_chars = -1;
     } else if (n_chars >= MAX_STRING) {
@@ -77,9 +79,10 @@ static int process_line_w2v(vocab_t *a_vocab, char *a_word,
     }
   }
 
-  if (n_chars > 0)
+  if (n_chars > 0) {
     add_word2vocab(a_vocab, a_word);
-
+    ++n_words;
+  }
   return n_words;
 }
 
@@ -109,9 +112,11 @@ size_t learn_vocab_from_trainfile(vocab_t *a_vocab, opt_t *a_opts) {
   else
     process_line = process_line_w2v;
 
-  add_word2vocab(a_vocab, EOS);
   long long train_words = 1;
   while ((read = getline(&line, &len, fin)) != -1) {
+    if (read > 1) {
+      add_word2vocab(a_vocab, EOS);
+    }
     if ((a_opts->m_debug_mode > 1) && (train_words % 100000 == 0)) {
       fprintf(stderr, "%lldK%c", train_words / 1000, 13);
       fflush(stderr);
@@ -122,7 +127,7 @@ size_t learn_vocab_from_trainfile(vocab_t *a_vocab, opt_t *a_opts) {
       reduce_vocab(a_vocab, a_opts);
   }
   free(line);
-  sort_vocab(a_vocab, a_opts->m_min_count);
+  a_vocab->m_train_words = sort_vocab(a_vocab, a_opts->m_min_count);
   create_binary_tree(a_vocab);
 
   if (ferror(fin)) {
@@ -131,7 +136,7 @@ size_t learn_vocab_from_trainfile(vocab_t *a_vocab, opt_t *a_opts) {
   }
   if (a_opts->m_debug_mode > 0) {
     fprintf(stderr, "Vocab size: %lld\n", a_vocab->m_vocab_size);
-    fprintf(stderr, "Words in train file: %lld\n", train_words);
+    fprintf(stderr, "Words in train file: %lld\n", a_vocab->m_train_words);
   }
   size_t file_size = ftell(fin);
   fclose(fin);

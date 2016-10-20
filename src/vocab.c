@@ -25,8 +25,8 @@ int *init_unigram_table(vocab_t *a_vocab) {
   if (vocab_size == 0)
     return NULL;
 
-  long long train_words_pow = 0;
-  real d1, power = 0.75;
+  double train_words_pow = 0;
+  double d1, power = 0.75;
   int *table = (int *) malloc(TABLE_SIZE * sizeof(int));
   long long a;
   for (a = 0; a < vocab_size; a++)
@@ -267,6 +267,7 @@ void reduce_vocab(vocab_t *a_vocab, opt_t *a_opts) {
 void init_vocab(vocab_t *a_vocab) {
   a_vocab->m_vocab_size = 0; /**< number of actually stored elements */
   a_vocab->m_max_vocab_size = 0;  /**< pre-allocated  */
+  a_vocab->m_train_words = 0;
   a_vocab->m_vocab = NULL;
   a_vocab->m_vocab_hash = (int *) calloc(VOCAB_HASH_SIZE, sizeof(int));
 }
@@ -274,6 +275,7 @@ void init_vocab(vocab_t *a_vocab) {
 void free_vocab(vocab_t *a_vocab) {
   free(a_vocab->m_vocab);
   free(a_vocab->m_vocab_hash);
+  a_vocab->m_train_words = 0;
   a_vocab->m_max_vocab_size = 0;
   a_vocab->m_vocab_size = 0;
 }
