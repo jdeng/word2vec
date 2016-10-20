@@ -79,6 +79,7 @@ static void usage(int a_ret) {
 
 int main(int argc, char **argv) {
   opt_t opt;
+  int alpha_set = 0;
   reset_opt(&opt);
 
   int i;
@@ -98,6 +99,7 @@ int main(int argc, char **argv) {
         opt.m_alpha = 0.05;
     } else if (strcmp(argv[i], "-alpha") == 0) {
       opt.m_alpha = atof(argv[++i]);
+      alpha_set = 1;
     } else if (strcmp(argv[i], "-output") == 0) {
       strcpy(opt.m_output_file, argv[++i]);
     } else if (strcmp(argv[i], "-window") == 0) {
@@ -130,6 +132,9 @@ int main(int argc, char **argv) {
       usage(1);
     }
   }
+
+  if (opt.m_cbow && !alpha_set)
+    opt.m_alpha = 0.05;
 
   if (i != argc) {
     i = argc - 1;
